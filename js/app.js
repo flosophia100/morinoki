@@ -7,6 +7,24 @@ const isRoom = document.body.classList.contains('page-room');
 if (isIndex) initIndex();
 if (isRoom) initRoom();
 
+// 森全体が見えるようビューをフィット
+function fitForestToView(canvas, state) {
+  if (!state.trees.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const W = rect.width, H = rect.height;
+  const pad = 140; // 樹1本の半径+余白
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  state.trees.forEach(t => {
+    minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
+    maxX = Math.max(maxX, t.x); maxY = Math.max(maxY, t.y);
+  });
+  const bboxW = Math.max(1, maxX - minX + pad * 2);
+  const bboxH = Math.max(1, maxY - minY + pad * 2);
+  const scale = Math.min(1.2, Math.min(W / bboxW, H / bboxH));
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  state.view = { ox: W / 2 - cx * scale, oy: H / 2 - cy * scale, scale };
+}
+
 function initIndex() {
   const form = document.getElementById('create-form');
   const created = document.getElementById('created');
@@ -71,6 +89,11 @@ async function initRoom() {
   const canvas = document.getElementById('forest-canvas');
   const forest = createForest(canvas, state);
 
+  // 初期表示: 森全体が画面に収まるようフィット
+  if (state.trees.length) {
+    fitForestToView(canvas, state);
+  }
+
   state.onTreeTap = (tree) => {
     if (state.session && tree.id === state.selfTreeId) {
       openNodePanel(state, tree, () => forest.render());
@@ -78,20 +101,22 @@ async function initRoom() {
       alert(`${tree.name}さん\nキーワード: ${(tree.nodes||[]).map(n=>n.text).join(' / ') || '(まだ)'}`);
     }
   };
-  state.onEmptyTap = () => {
-    if (!state.session) {
-      openPlantModal(state, async () => {
-        state.session = loadSession(slug);
-        state.selfTreeId = state.session.treeId;
-        await reload();
-        forest.render();
-        const mine = state.trees.find(t => t.id === state.selfTreeId);
-        if (mine) openNodePanel(state, mine, () => forest.render());
-      });
-    }
-  };
 
-  document.getElementById('plant-btn').addEventListener('click', () => state.onEmptyTap({ x: 0, y: 0 }));
+  // 植樹フロー: plant-btn または 空地タップ → 常に開く(別の人がこの端末で植えるケースに対応)
+  function openPlanting() {
+    openPlantModal(state, async () => {
+      state.session = loadSession(slug);
+      state.selfTreeId = state.session.treeId;
+      await reload();
+      fitForestToView(canvas, state);
+      forest.render();
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) openNodePanel(state, mine, () => forest.render());
+    });
+  }
+  state.onEmptyTap = () => openPlanting();
+
+  document.getElementById('plant-btn').addEventListener('click', openPlanting);
   forest.render();
 
   async function reload() {
