@@ -100,10 +100,14 @@ body.page-room { overflow: hidden; background: #ede3cf; }
 .node-panel li .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
 .node-edit {
-  position: fixed; background: var(--paper); padding: 0.8rem; border: 1px solid rgba(74,63,50,0.2);
-  z-index: 25; min-width: 220px; display: flex; flex-direction: column; gap: 0.5rem;
+  position: fixed; background: var(--paper); padding: 0.9rem; border: 1px solid rgba(74,63,50,0.2);
+  z-index: 25; min-width: 260px; max-width: 320px; display: flex; flex-direction: column; gap: 0.4rem;
+  box-shadow: 0 6px 24px rgba(31,26,21,0.15);
 }
-.node-edit input { padding: 0.45rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.92rem; border: 1px solid rgba(74,63,50,0.25); outline: none; }
+.mini-label { font-family: 'Klee One',serif; font-size: 0.72rem; color: var(--ink-soft); letter-spacing: 0.08em; margin-top: 0.25rem; }
+.node-edit input,
+.node-edit textarea { padding: 0.45rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.92rem; border: 1px solid rgba(74,63,50,0.25); outline: none; background: white; resize: vertical; }
+.node-edit textarea { min-height: 4rem; font-size: 0.85rem; line-height: 1.5; }
 .size-row { display: flex; gap: 0.2rem; }
 .size-row button { flex: 1; padding: 0.4rem 0; font-family: 'Klee One',serif; font-size: 0.78rem; background: transparent; border: 1px solid rgba(74,63,50,0.2); cursor: pointer; }
 .size-row button.on { background: var(--moss); color: var(--paper); border-color: var(--moss); }
@@ -115,3 +119,18 @@ body.page-room { overflow: hidden; background: #ede3cf; }
   padding: 0.5rem 0.9rem; font-family: 'Shippori Mincho',serif; font-size: 0.85rem;
   background: transparent; color: var(--bud); border: 1px solid var(--bud); cursor: pointer;
 }
+
+/* === Node detail(他人のノード読み取り) === */
+.node-detail-head { display: flex; gap: 0.8rem; align-items: center; }
+.dot-lg { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15); }
+#node-detail-title { font-size: 1.1rem; color: var(--moss-deep); letter-spacing: 0.1em; }
+.node-detail-desc { font-family: 'Klee One', serif; font-size: 0.92rem; color: var(--ink); line-height: 1.7; white-space: pre-wrap; padding: 0.6rem 0.8rem; background: rgba(255,252,244,0.6); border-left: 3px solid var(--moss); }
+
+/* === Tree detail(他人の樹全体) === */
+.tree-detail-list { list-style: none; margin: 0.3rem 0 0; padding: 0; max-height: 45vh; overflow-y: auto; }
+.tree-detail-list li { padding: 0.5rem 0; border-bottom: 1px dashed rgba(74,63,50,0.15); display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.tree-detail-list li .kw { font-size: 0.95rem; color: var(--ink); }
+.tree-detail-list li .desc { flex-basis: 100%; font-family: 'Klee One', serif; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.6; padding: 0.3rem 0 0 1.3rem; white-space: pre-wrap; }
+.tree-detail-list .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+.desc-mark { margin-left: auto; color: var(--gold); font-weight: 600; font-size: 0.9rem; }

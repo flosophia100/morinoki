@@ -30,22 +30,126 @@ export function createForest(canvas, state) {
   resize();
   window.addEventListener('resize', () => { resize(); render(); });
 
+  // interaction state
+  // mode: 'pan' | 'drag-tree' | 'drag-node' | null
   let drag = null;
+
   function pt(e) {
     const r = canvas.getBoundingClientRect();
     const src = e.touches?.[0] || e.changedTouches?.[0] || e;
     return { x: src.clientX - r.left, y: src.clientY - r.top };
   }
-  function onDown(e){ const p = pt(e); drag = { start: p, last: p, moved: 0 }; }
-  function onMove(e){
+  function screenToWorld(x, y) {
+    return { x: (x - state.view.ox) / state.view.scale, y: (y - state.view.oy) / state.view.scale };
+  }
+
+  // ヒットテスト: 最前面の樹 > 自分の樹なら中のノードまで判定
+  // 戻り値: { type: 'node', tree, node } | { type: 'trunk', tree } | null
+  function hitTest(sx, sy) {
+    const w = screenToWorld(sx, sy);
+    const trees = state.trees || [];
+    // ノード(最前面から) — ただし自分の樹のみ(編集対象)
+    for (let i = trees.length - 1; i >= 0; i--) {
+      const t = trees[i];
+      for (let j = (t.nodes || []).length - 1; j >= 0; j--) {
+        const n = t.nodes[j];
+        if (n._x == null) continue;
+        const dx = w.x - n._x, dy = w.y - n._y;
+        const r = (n._r || 10) / state.view.scale;
+        if (dx*dx + dy*dy <= r*r) {
+          return { type: 'node', tree: t, node: n };
+        }
+      }
+    }
+    // 幹
+    for (let i = trees.length - 1; i >= 0; i--) {
+      const t = trees[i];
+      const dx = w.x - t.x, dy = w.y - t.y;
+      const r = (t._trunkR || 12) / state.view.scale * 2; // タップしやすく
+      if (dx*dx + dy*dy <= r*r) {
+        return { type: 'trunk', tree: t };
+      }
+    }
+    return null;
+  }
+
+  function onDown(e) {
+    const p = pt(e);
+    const hit = hitTest(p.x, p.y);
+    const world = screenToWorld(p.x, p.y);
+    drag = {
+      start: p, last: p, moved: 0, startWorld: world,
+      mode: 'pan', hit
+    };
+    // 自分の樹/ノードのみドラッグ可能
+    if (hit && state.session && hit.tree.id === state.selfTreeId) {
+      if (hit.type === 'trunk') {
+        drag.mode = 'drag-tree';
+        drag.origX = hit.tree.x;
+        drag.origY = hit.tree.y;
+      } else if (hit.type === 'node') {
+        drag.mode = 'drag-node';
+        // ノードのオフセット(幹からの相対位置)を初期化
+        // 既存offsetがなければ、描画されている位置(_x, _y)から算出
+        drag.origOffX = hit.node.offset_x != null
+          ? Number(hit.node.offset_x)
+          : (hit.node._x - hit.tree.x);
+        drag.origOffY = hit.node.offset_y != null
+          ? Number(hit.node.offset_y)
+          : (hit.node._y - hit.tree.y);
+      }
+    }
+  }
+
+  function onMove(e) {
     if (!drag) return;
     const p = pt(e);
     const dx = p.x - drag.last.x, dy = p.y - drag.last.y;
-    state.view.ox += dx; state.view.oy += dy;
-    drag.last = p; drag.moved += Math.abs(dx) + Math.abs(dy);
-    render();
+    drag.last = p;
+    drag.moved += Math.abs(dx) + Math.abs(dy);
+    const world = screenToWorld(p.x, p.y);
+    const worldDx = world.x - drag.startWorld.x;
+    const worldDy = world.y - drag.startWorld.y;
+
+    if (drag.mode === 'drag-tree') {
+      drag.hit.tree.x = drag.origX + worldDx;
+      drag.hit.tree.y = drag.origY + worldDy;
+      render();
+    } else if (drag.mode === 'drag-node') {
+      drag.hit.node.offset_x = drag.origOffX + worldDx;
+      drag.hit.node.offset_y = drag.origOffY + worldDy;
+      render();
+    } else {
+      // pan
+      state.view.ox += dx;
+      state.view.oy += dy;
+      render();
+    }
   }
-  function onWheel(e){
+
+  async function onUp() {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+
+    if (d.moved > 6) {
+      // ドラッグ終了 → 永続化
+      if (d.mode === 'drag-tree' && state.onTreeMoved) {
+        state.onTreeMoved(d.hit.tree);
+      } else if (d.mode === 'drag-node' && state.onNodeMoved) {
+        state.onNodeMoved(d.hit.tree, d.hit.node);
+      }
+    } else {
+      // タップ: 対象があればそれに応じてハンドラを呼ぶ
+      if (d.hit) {
+        if (d.hit.type === 'trunk' && state.onTrunkTap) state.onTrunkTap(d.hit.tree);
+        else if (d.hit.type === 'node' && state.onNodeTap) state.onNodeTap(d.hit.tree, d.hit.node);
+      }
+      // 空地はなにもしない(以前の「植樹モーダル」は廃止)
+    }
+  }
+
+  function onWheel(e) {
     e.preventDefault();
     const p = pt(e);
     zoomAt(p.x, p.y, e.deltaY > 0 ? 0.9 : 1.1);
@@ -57,31 +161,13 @@ export function createForest(canvas, state) {
     state.view.oy = py - (py - state.view.oy) * (s / state.view.scale);
     state.view.scale = s;
   }
-  function onClick(e) {
-    const wasDrag = drag && drag.moved > 6;
-    const p = pt(e);
-    drag = null;
-    if (wasDrag) return;
-    const world = screenToWorld(p.x, p.y);
-    const hit = (state.trees || []).slice().reverse().find(t => {
-      const dx = world.x - t.x, dy = world.y - t.y;
-      const r = 60 + (t.nodes?.length || 0) * 3;
-      return dx*dx + dy*dy < r*r;
-    });
-    if (hit && state.onTreeTap) state.onTreeTap(hit);
-    else if (state.onEmptyTap) state.onEmptyTap(world);
-  }
-  function screenToWorld(x, y) {
-    return { x: (x - state.view.ox) / state.view.scale, y: (y - state.view.oy) / state.view.scale };
-  }
 
   canvas.addEventListener('mousedown', onDown);
   canvas.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', () => {});
+  window.addEventListener('mouseup', onUp);
   canvas.addEventListener('touchstart', onDown, { passive: false });
   canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMove(e); }, { passive: false });
-  canvas.addEventListener('touchend', (e) => { onClick(e); });
-  canvas.addEventListener('click', onClick);
+  canvas.addEventListener('touchend', onUp);
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   function render() {

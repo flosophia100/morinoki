@@ -48,6 +48,7 @@ function showRecoveryModal(key, onClose) {
   document.getElementById('recovery-ok').onclick = () => { m.classList.add('hidden'); onClose && onClose(); };
 }
 
+// 自分の樹: 幹タップ → ノード一覧パネル
 export function openNodePanel(state, tree, onChange) {
   const panel = document.getElementById('node-panel');
   document.getElementById('node-panel-name').textContent = tree.name;
@@ -80,7 +81,7 @@ export function openNodePanel(state, tree, onChange) {
   function renderList() {
     const ul = document.getElementById('node-list');
     ul.innerHTML = (tree.nodes || []).map((n, i) =>
-      `<li data-idx="${i}"><span class="dot" style="background:${n.color}"></span>${escapeHtml(n.text)}</li>`
+      `<li data-idx="${i}"><span class="dot" style="background:${n.color}"></span>${escapeHtml(n.text)}${n.description ? '<span class="desc-mark">…</span>' : ''}</li>`
     ).join('');
     ul.querySelectorAll('li').forEach(li => {
       li.onclick = () => openNodeEdit(state, tree, Number(li.dataset.idx), renderList, onChange);
@@ -88,11 +89,14 @@ export function openNodePanel(state, tree, onChange) {
   }
 }
 
-function openNodeEdit(state, tree, idx, rerender, onChange) {
+// 自分のノードの編集ポップオーバー
+export function openNodeEdit(state, tree, idx, rerender, onChange) {
   const n = tree.nodes[idx];
   const box = document.getElementById('node-edit');
   const txt = document.getElementById('node-edit-text');
+  const desc = document.getElementById('node-edit-desc');
   txt.value = n.text;
+  desc.value = n.description || '';
 
   box.querySelectorAll('.size-row button').forEach(b => {
     b.classList.toggle('on', Number(b.dataset.size) === n.size);
@@ -119,14 +123,17 @@ function openNodeEdit(state, tree, idx, rerender, onChange) {
     const newSize = Number(box.querySelector('.size-row button.on')?.dataset.size || n.size);
     const newColor = cr.querySelector('button.on')?.dataset.color || n.color;
     const newText = txt.value.trim();
+    const newDesc = desc.value.trim();
     if (!newText) return;
     try {
       const saved = await api.upsertNode(state.session.editToken, tree.id, {
-        id: n.id, text: newText, size: newSize, color: newColor, ord: n.ord
+        id: n.id, text: newText, size: newSize, color: newColor, ord: n.ord,
+        description: newDesc || null
       });
       tree.nodes[idx] = saved;
       box.classList.add('hidden');
-      rerender(); onChange && onChange();
+      rerender && rerender();
+      onChange && onChange();
     } catch (e) {
       alert('保存に失敗しました: ' + e.message);
     }
@@ -137,9 +144,48 @@ function openNodeEdit(state, tree, idx, rerender, onChange) {
       await api.deleteNode(state.session.editToken, n.id);
       tree.nodes.splice(idx, 1);
       box.classList.add('hidden');
-      rerender(); onChange && onChange();
+      rerender && rerender();
+      onChange && onChange();
     } catch (e) {
       alert('削除に失敗しました: ' + e.message);
     }
   };
+  document.getElementById('node-edit-cancel').onclick = () => box.classList.add('hidden');
+}
+
+// 読み取り専用ノード詳細(他人の樹のノードをタップしたとき)
+export function openNodeDetail(tree, node) {
+  const box = document.getElementById('node-detail');
+  document.getElementById('node-detail-title').textContent = node.text;
+  document.getElementById('node-detail-owner').textContent = `${tree.name} さんのキーワード`;
+  const descEl = document.getElementById('node-detail-desc');
+  if (node.description) {
+    descEl.textContent = node.description;
+    descEl.style.display = '';
+  } else {
+    descEl.textContent = '';
+    descEl.style.display = 'none';
+  }
+  // サイズと色のプレビュー
+  document.getElementById('node-detail-dot').style.background = node.color;
+  box.classList.remove('hidden');
+  document.getElementById('node-detail-close').onclick = () => box.classList.add('hidden');
+}
+
+// 他人の樹タップ(幹)→ ノード一覧(読み取り専用)
+export function openTreeDetail(tree) {
+  const box = document.getElementById('tree-detail');
+  document.getElementById('tree-detail-name').textContent = tree.name;
+  const d = new Date(tree.createdAt || tree.created_at);
+  const dateStr = isNaN(d) ? '' : ` · ${d.getMonth()+1}月${d.getDate()}日植樹`;
+  document.getElementById('tree-detail-meta').textContent = `${(tree.nodes||[]).length}個のキーワード${dateStr}`;
+  const ul = document.getElementById('tree-detail-list');
+  ul.innerHTML = (tree.nodes || []).map(n =>
+    `<li><span class="dot" style="background:${n.color}"></span>
+      <span class="kw">${escapeHtml(n.text)}</span>
+      ${n.description ? `<div class="desc">${escapeHtml(n.description)}</div>` : ''}
+    </li>`
+  ).join('');
+  box.classList.remove('hidden');
+  document.getElementById('tree-detail-close').onclick = () => box.classList.add('hidden');
 }

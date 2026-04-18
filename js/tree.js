@@ -1,39 +1,41 @@
 import { seededRandom } from './utils.js';
 
-// 樹の描画(上空視点・幹+枝+葉ノード)
-// - 幹: 中央の小さな円(+名前ラベル)= 自分
-// - 枝: 幹から各キーワードへ伸びる曲線
-// - 葉ノード: 枝の先端にある色つきの円 = キーワード
-//
-// tree: { id, name, seed, x, y, nodes: [{id, text, size, color, ord}] }
-// cx, cy: world座標の中心
-export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
-  const { highlight = false } = opts;
+// 各ノードの位置を決定(offsetがあれば優先、なければseedベース)
+// 返り値を forest.js のヒットテストでも使う
+export function computeNodePositions(tree, cx, cy, scale = 1.0) {
   const rng = seededRandom(Number(tree.seed) || 1);
   const nodes = tree.nodes || [];
   const n = nodes.length;
-
-  // 枝の長さは「サイズで決まる基本長 × ノード個別のゆらぎ」
   const baseBranchLen = 70 * scale;
-
-  // ノードの位置を事前計算(他箇所でも使うので)
-  const positions = nodes.map((node, i) => {
-    // 角度は均等割 + 小さなゆらぎ(seed依存で樹ごとに個性)
+  return nodes.map((node, i) => {
+    // seedベースのデフォルト角度・長さ
     const a0 = (Math.PI * 2 * i) / Math.max(1, n) - Math.PI / 2;
     const a = a0 + (rng() - 0.5) * 0.5;
-    // 枝長はノードのsize(1..5)で重みをつける + ゆらぎ
     const sizeFactor = 0.85 + (node.size || 3) * 0.05;
     const len = baseBranchLen * sizeFactor * (0.9 + rng() * 0.3);
-    return {
-      angle: a,
-      length: len,
-      ex: cx + Math.cos(a) * len,
-      ey: cy + Math.sin(a) * len,
-      nr: (5 + (node.size || 3) * 2) * scale
-    };
+    let ex, ey;
+    if (node.offset_x != null && node.offset_y != null) {
+      ex = cx + Number(node.offset_x) * scale;
+      ey = cy + Number(node.offset_y) * scale;
+    } else {
+      ex = cx + Math.cos(a) * len;
+      ey = cy + Math.sin(a) * len;
+    }
+    const nr = (5 + (node.size || 3) * 2) * scale;
+    return { angle: a, length: len, ex, ey, nr };
   });
+}
 
-  // ハイライト(自分の樹)は枝より下(背景)
+export const TRUNK_RADIUS = 12; // 幹のヒットテスト半径(world座標, scale=1時)
+
+// 樹の描画(上空視点・幹+枝+葉ノード)
+export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
+  const { highlight = false } = opts;
+  const nodes = tree.nodes || [];
+  const positions = computeNodePositions(tree, cx, cy, scale);
+  const baseBranchLen = 70 * scale;
+
+  // ハイライトリング(自分の樹)
   if (highlight) {
     ctx.save();
     ctx.strokeStyle = 'rgba(196, 154, 62, 0.45)';
@@ -46,7 +48,7 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     ctx.restore();
   }
 
-  // 地面の影(幹の根元)
+  // 地面の影
   ctx.save();
   ctx.fillStyle = 'rgba(90, 70, 40, 0.15)';
   ctx.beginPath();
@@ -54,17 +56,21 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   ctx.fill();
   ctx.restore();
 
-  // 枝: 幹→ノード へ曲線
+  // 枝(幹→ノード)
   nodes.forEach((node, i) => {
     const p = positions[i];
     ctx.save();
     ctx.strokeStyle = 'rgba(107, 74, 43, 0.75)';
     ctx.lineWidth = Math.max(1.2, (2.2 - i * 0.05)) * scale;
     ctx.lineCap = 'round';
-    // 制御点: 直線からわずかに反らせた自然なカーブ
-    const sway = (rng() - 0.5) * 0.35;
-    const mx = cx + Math.cos(p.angle + sway) * p.length * 0.55;
-    const my = cy + Math.sin(p.angle + sway) * p.length * 0.55;
+    // 曲線の制御点: 手動位置の場合は直線に近く、自動の場合は自然なカーブ
+    const dx = p.ex - cx, dy = p.ey - cy;
+    const len2 = Math.hypot(dx, dy);
+    const perpX = -dy / (len2 || 1);
+    const perpY = dx / (len2 || 1);
+    const sway = (node.offset_x != null) ? 0 : len2 * 0.08;
+    const mx = (cx + p.ex) / 2 + perpX * sway;
+    const my = (cy + p.ey) / 2 + perpY * sway;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.quadraticCurveTo(mx, my, p.ex, p.ey);
@@ -72,10 +78,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     ctx.restore();
   });
 
-  // 葉ノード(キーワード)
+  // 葉ノード
   nodes.forEach((node, i) => {
     const p = positions[i];
-    // 外側のほんのり影
+    // 影
     ctx.save();
     ctx.fillStyle = 'rgba(58, 72, 40, 0.12)';
     ctx.beginPath();
@@ -83,18 +89,24 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     ctx.fill();
     ctx.restore();
 
-    // ノード本体
+    // 本体
     ctx.fillStyle = node.color || '#5a6b3e';
     ctx.beginPath();
     ctx.arc(p.ex, p.ey, p.nr, 0, Math.PI * 2);
     ctx.fill();
-
-    // 縁取り
     ctx.strokeStyle = 'rgba(31, 26, 21, 0.3)';
     ctx.lineWidth = 0.8;
     ctx.stroke();
 
-    // ノード中央にキーワードラベル(ノードが大きいとき)
+    // 説明ありの印(右上に小さなドット)
+    if (node.description) {
+      ctx.fillStyle = 'rgba(196, 154, 62, 0.95)';
+      ctx.beginPath();
+      ctx.arc(p.ex + p.nr * 0.7, p.ey - p.nr * 0.7, 2.5 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ラベル
     if (p.nr >= 10 * scale) {
       ctx.save();
       ctx.fillStyle = 'rgba(255, 252, 244, 0.95)';
@@ -104,16 +116,12 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.fillText(node.text, p.ex, p.ey);
       ctx.restore();
     } else {
-      // 小さいノードはノード外側にテキスト
       ctx.save();
-      ctx.fillStyle = 'rgba(58, 72, 40, 0.85)';
       ctx.font = `${11 * scale}px 'Klee One', serif`;
-      // 方向で揃える
-      const isRight = Math.cos(p.angle) >= 0;
+      const isRight = Math.cos(Math.atan2(p.ey - cy, p.ex - cx)) >= 0;
       ctx.textAlign = isRight ? 'left' : 'right';
       ctx.textBaseline = 'middle';
       const pad = (p.nr + 4) * (isRight ? 1 : -1);
-      // 背景
       const tw = ctx.measureText(node.text).width;
       const bgX = isRight ? p.ex + pad - 1 : p.ex + pad - tw - 3;
       ctx.fillStyle = 'rgba(244, 237, 224, 0.7)';
@@ -127,19 +135,16 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     node._x = p.ex; node._y = p.ey; node._r = p.nr;
   });
 
-  // 幹(中央の小さな円)
+  // 幹
   ctx.save();
-  // 外側のぼかし
   ctx.fillStyle = 'rgba(107, 74, 43, 0.25)';
   ctx.beginPath();
   ctx.arc(cx, cy, 10 * scale, 0, Math.PI * 2);
   ctx.fill();
-  // 幹本体
   ctx.fillStyle = '#6b4a2b';
   ctx.beginPath();
   ctx.arc(cx, cy, 6 * scale, 0, Math.PI * 2);
   ctx.fill();
-  // 年輪
   ctx.strokeStyle = 'rgba(61, 40, 23, 0.5)';
   ctx.lineWidth = 0.8;
   ctx.beginPath();
@@ -147,7 +152,7 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   ctx.stroke();
   ctx.restore();
 
-  // 名前ラベル(幹の真下)
+  // 名前ラベル
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
@@ -160,6 +165,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   ctx.fillText(tree.name, cx, textY);
   ctx.restore();
 
-  // 他からのヒットテスト用に樹の半径を返す
+  // 幹のヒットテスト情報も保存
+  tree._trunkX = cx;
+  tree._trunkY = cy;
+  tree._trunkR = TRUNK_RADIUS * scale;
+
   return { radius: baseBranchLen * 1.35 };
 }
