@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>森</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/main.css">
+<script>
+window.SUPABASE_CONFIG = {
+  url: 'https://wlxqavbrarthldodiqyp.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndseHFhdmJyYXJ0aGxkb2RpcXlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MzIwMTIsImV4cCI6MjA5MjEwODAxMn0.Wagb6Qu-zD3v6Rw3L_HFUevhtxT2Z-EqQCAueqqbvQg'
+};
+</script>
+</head>
+<body class="page-room">
+
+<header class="room-header">
+  <span id="forest-name" class="forest-name">森</span>
+  <span id="forest-count" class="forest-count">0本の樹</span>
+</header>
+
+<div class="forest-container">
+  <canvas id="forest-canvas"></canvas>
+</div>
+
+<footer class="room-footer">
+  <button id="plant-btn" class="btn-plant">+ 樹を植える</button>
+</footer>
+
+<div id="plant-modal" class="modal hidden">
+  <div class="modal-panel">
+    <h2>樹を植える</h2>
+    <label>名前 <input id="plant-name" type="text" maxlength="20" required></label>
+    <label>合言葉(4〜10桁) <input id="plant-pass" type="password" minlength="4" maxlength="10" required></label>
+    <label>合言葉(確認) <input id="plant-pass2" type="password" minlength="4" maxlength="10" required></label>
+    <label>メール(任意・復元用) <input id="plant-email" type="email"></label>
+    <div class="modal-actions">
+      <button id="plant-cancel" class="btn-secondary">キャンセル</button>
+      <button id="plant-submit" class="btn-primary">植える</button>
+    </div>
+    <p id="plant-error" class="error hidden"></p>
+  </div>
+</div>
+
+<div id="recovery-modal" class="modal hidden">
+  <div class="modal-panel">
+    <h2>復元キー</h2>
+    <p class="hint">合言葉を忘れたときに使います。いま必ず控えてください(この画面でしか表示されません)。</p>
+    <code id="recovery-key"></code>
+    <div class="modal-actions">
+      <button id="recovery-copy" class="btn-secondary">コピー</button>
+      <button id="recovery-ok" class="btn-primary">保存した</button>
+    </div>
+  </div>
+</div>
+
+<aside id="node-panel" class="node-panel hidden">
+  <header>
+    <span id="node-panel-name">-</span>
+    <button id="node-panel-close">×</button>
+  </header>
+  <div class="node-add">
+    <input id="node-input" type="text" placeholder="キーワード" maxlength="20">
+    <button id="node-add-btn">＋</button>
+  </div>
+  <ul id="node-list"></ul>
+</aside>
+
+<div id="node-edit" class="node-edit hidden">
+  <input id="node-edit-text" type="text" maxlength="20">
+  <div class="size-row">
+    <button data-size="1">XS</button><button data-size="2">S</button>
+    <button data-size="3">M</button><button data-size="4">L</button><button data-size="5">XL</button>
+  </div>
+  <div class="color-row" id="color-row"></div>
+  <div class="node-edit-actions">
+    <button id="node-edit-delete" class="btn-danger">削除</button>
+    <button id="node-edit-save" class="btn-primary">保存</button>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

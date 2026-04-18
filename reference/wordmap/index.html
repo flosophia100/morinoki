@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ワードマップエディター - D3.js版（モジュール版）</title>
+    
+    <!-- External Dependencies -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <!-- CORS/外部API呼び出し無効化 -->
+    <script>
+        // MixpanelなどのアナリティクスAPIを完全無効化
+        window.mixpanel = { 
+            track: function() {}, 
+            init: function() {},
+            identify: function() {},
+            alias: function() {},
+            register: function() {},
+            register_once: function() {},
+            unregister: function() {},
+            get_distinct_id: function() { return 'blocked'; },
+            get_property: function() { return null; },
+            set_config: function() {},
+            reset: function() {},
+            opt_out_tracking: function() {},
+            opt_in_tracking: function() {},
+            has_opted_out_tracking: function() { return true; },
+            people: {
+                set: function() {},
+                set_once: function() {},
+                increment: function() {},
+                append: function() {},
+                union: function() {},
+                track_charge: function() {},
+                clear_charges: function() {},
+                delete_user: function() {}
+            }
+        };
+        
+        // XMLHttpRequestを完全にブロック
+        const originalXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+            const xhr = new originalXHR();
+            const originalOpen = xhr.open;
+            const originalSend = xhr.send;
+            
+            xhr.open = function(method, url, ...args) {
+                // 外部API呼び出しを完全ブロック
+                if (url.includes('mixpanel.com') || 
+                    url.includes('analytics') || 
+                    url.includes('api-js.mixpanel.com') ||
+                    url.includes('engage/?verbose=1')) {
+                    console.log('外部API呼び出しをブロック:', url);
+                    // 何もしない（リクエストを送信しない）
+                    return;
+                }
+                return originalOpen.apply(this, [method, url, ...args]);
+            };
+            
+            xhr.send = function(data) {
+                // URLが外部APIの場合は送信しない
+                if (this._url && (this._url.includes('mixpanel.com') || this._url.includes('analytics'))) {
+                    console.log('外部API送信をブロック');
+                    return;
+                }
+                return originalSend.apply(this, [data]);
+            };
+            
+            return xhr;
+        };
+        
+        // fetchもブロック
+        const originalFetch = window.fetch;
+        window.fetch = function(url, options) {
+            if (typeof url === 'string' && (url.includes('mixpanel.com') || url.includes('analytics'))) {
+                console.log('fetch API呼び出しをブロック:', url);
+                return Promise.reject(new Error('外部API呼び出しがブロックされました'));
+            }
+            return originalFetch.apply(this, arguments);
+        };
+        
+        // Content Scriptからのアクセスもブロック
+        Object.defineProperty(window, 'XMLHttpRequest', {
+            value: window.XMLHttpRequest,
+            writable: false,
+            configurable: false
+        });
+        
+        // グローバルなエラーハンドリング
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('mixpanel')) {
+                e.preventDefault();
+                console.log('Mixpanel関連エラーをキャッチしました');
+                return false;
+            }
+        });
+        
+        // 未処理のPromise rejectionもキャッチ
+        window.addEventListener('unhandledrejection', function(e) {
+            if (e.reason && e.reason.toString().includes('mixpanel')) {
+                e.preventDefault();
+                console.log('Mixpanel関連のPromise rejectionをキャッチしました');
+                return false;
+            }
+        });
+    </script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- デバッグ用エラーハンドリング -->
+    <script>
+        // グローバルエラーハンドリング
+        window.addEventListener('error', function(e) {
+            console.error('グローバルエラー:', e.message, e.filename, e.lineno);
+            showErrorMessage(`スクリプトエラー: ${e.message}`);
+        });
+        
+        window.addEventListener('unhandledrejection', function(e) {
+            console.error('Promise拒否:', e.reason);
+            showErrorMessage(`非同期エラー: ${e.reason}`);
+        });
+        
+        function showErrorMessage(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.style.cssText = `
+                position: fixed; top: 10px; right: 10px; 
+                background: #f44336; color: white; 
+                padding: 10px; border-radius: 4px; 
+                z-index: 10000; max-width: 300px;
+                font-size: 12px;
+            `;
+            errorDiv.innerHTML = `<strong>エラー:</strong><br>${message}`;
+            document.body.appendChild(errorDiv);
+            
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 5000);
+        }
+        
+        console.log('エラーハンドリング設定完了');
+    </script>
+    
+    <!-- ハイブリッドモジュールローダー -->
+    <script src="module-loader.js"></script>
+    
+    <!-- フォールバック用スクリプト（モジュールローダー失敗時） -->
+    <script>
+        // モジュールローダー失敗時のフォールバック
+        window.addEventListener('load', function() {
+            console.log('load イベント発生');
+            
+            if (!window.ModuleLoader) {
+                console.warn('ModuleLoader not available, loading scripts directly');
+                showErrorMessage('ModuleLoaderが利用できません。従来方式で読み込みます。');
+                
+                // 従来方式での読み込み
+                const scripts = [
+                    'config.js',
+                    'wordmap-utils.js', 
+                    'wordmap-core.js',
+                    'ui/WordMapPalettes.js',
+                    'ui/WordMapControls.js',
+                    'wordmap-ui.js',
+                    'wordmap-io.js'
+                ];
+                
+                let loadedCount = 0;
+                scripts.forEach(src => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = () => {
+                        loadedCount++;
+                        console.log(`スクリプト読み込み完了: ${src} (${loadedCount}/${scripts.length})`);
+                        
+                        if (loadedCount === scripts.length) {
+                            console.log('全スクリプト読み込み完了');
+                            initializeEditor();
+                        }
+                    };
+                    script.onerror = (error) => {
+                        console.error(`スクリプト読み込み失敗: ${src}`, error);
+                        showErrorMessage(`スクリプト読み込み失敗: ${src}`);
+                    };
+                    document.head.appendChild(script);
+                });
+            } else {
+                console.log('ModuleLoader が利用可能');
+            }
+        });
+        
+        function initializeEditor() {
+            console.log('エディター初期化開始');
+            
+            // 必要なグローバル変数の確認
+            const requiredGlobals = ['CONFIG', 'WordMapUtils', 'D3WordMapEditor'];
+            const missing = requiredGlobals.filter(name => !window[name]);
+            
+            if (missing.length > 0) {
+                const message = `必要なモジュールが見つかりません: ${missing.join(', ')}`;
+                console.error(message);
+                showErrorMessage(message);
+                return;
+            }
+            
+            console.log('必要なモジュールが利用可能');
+        }
+    </script>
+</head>
+<body>
+    <!-- ローカルファイル読込用の非表示インプット -->
+    <input type="file" id="fileInput" accept=".json" style="display: none;">
+    
+    <div class="app-container">
+        <!-- ヘッダーバー -->
+        <header class="header-bar">
+            <h1 class="app-title">ワードマップエディター - D3.js版</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" id="saveBtn">💾 保存</button>
+                <button class="btn btn-primary" id="loadBtn">📁 読込</button>
+                <span class="header-separator"></span>
+                <button class="btn btn-primary" id="fitBtn">📐 全体</button>
+                <button class="btn btn-primary" id="resetLayoutBtn">🔄 再配置</button>
+                <button class="btn btn-primary" id="helpBtn">❓ ヘルプ</button>
+                <button class="btn btn-primary" id="debugToggle">🔧 デバッグ</button>
+                <span class="header-separator"></span>
+                <button class="btn btn-danger" id="clearBtn">🗑️ クリア</button>
+                <button class="btn btn-secondary" id="themeToggle">🌓 テーマ</button>
+            </div>
+        </header>
+        
+        
+        <!-- メインエリア -->
+        <main class="main-area">
+            <!-- キャンバス -->
+            <div class="canvas-container">
+                <svg class="wordmap-canvas" id="wordmapSvg">
+                    <!-- グリッドパターン定義 -->
+                    <defs>
+                        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e0e0e0" stroke-width="1" opacity="0.5"/>
+                        </pattern>
+                    </defs>
+                    
+                    <!-- グリッド背景 -->
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                    
+                    <!-- ズーム・パン用グループ -->
+                    <g id="viewport">
+                        <!-- リンクグループ -->
+                        <g id="linksGroup"></g>
+                        <!-- ノードグループ -->
+                        <g id="nodesGroup"></g>
+                    </g>
+                </svg>
+                
+            </div>
+            
+            <!-- サイドパネル -->
+            <aside class="side-panel" id="sidePanel">
+                <div class="panel-header">プロパティ</div>
+                <div class="panel-content">
+                    <div id="noSelectionMessage">
+                        <p>要素を選択してください</p>
+                    </div>
+                    <div id="nodeProperties" class="hidden">
+                        <h4>ノード設定</h4>
+                        <label>タイトル:</label>
+                        <input type="text" id="nodeText" placeholder="ノードのタイトル">
+                        
+                        <label>説明文 (<span id="descCharCount">0</span>/300字):</label>
+                        <textarea id="nodeDescription" placeholder="ノードの詳細説明（最大300字）" 
+                                  maxlength="300" rows="10"></textarea>
+                        
+                        <label>サイズ:</label>
+                        <div id="nodeSizeSelector" class="size-selector">
+                            <button class="size-btn" data-size="20" title="極小">XS</button>
+                            <button class="size-btn" data-size="25" title="小">S</button>
+                            <button class="size-btn active" data-size="30" title="中">M</button>
+                            <button class="size-btn" data-size="40" title="大">L</button>
+                            <button class="size-btn" data-size="50" title="極大">XL</button>
+                        </div>
+                        <input type="hidden" id="nodeSize" value="30">
+                        
+                        <label>カテゴリ:</label>
+                        <!-- 2025-06-22 修正: カテゴリ一覧と同じデザインに変更 -->
+                        <div id="nodeCategory" class="category-selector">
+                            <!-- JavaScriptで動的生成 -->
+                        </div>
+                        
+                        <div class="checkbox-group">
+                            <label for="nodePinned">固定位置:</label>
+                            <input type="checkbox" id="nodePinned">
+                        </div>
+                    </div>
+                    
+                    <div id="linkProperties" class="hidden">
+                        <h4>リンク設定</h4>
+                        <label>太さ:</label>
+                        <input type="range" id="linkWidth" min="1" max="10" value="2">
+                        
+                        
+                        <label>線スタイル:</label>
+                        <div id="linkStyleSelector" class="style-selector">
+                            <button class="style-btn active" data-style="solid" title="実線">━</button>
+                            <button class="style-btn" data-style="dashed" title="破線">┅</button>
+                            <button class="style-btn" data-style="dotted" title="点線">┈</button>
+                        </div>
+                        
+                        <label>名前:</label>
+                        <input type="text" id="linkName" placeholder="リンクの名前（線上に表示）">
+                        
+                        <label>カテゴリ:</label>
+                        <!-- 2025-06-22 修正: カテゴリ一覧と同じデザインに変更 -->
+                        <div id="linkCategory" class="category-selector">
+                            <!-- JavaScriptで動的生成 -->
+                        </div>
+                    </div>
+                    
+                    <!-- カテゴリ管理 -->
+                    <div id="categorySettings" class="property-group">
+                        <h4>カテゴリ管理</h4>
+                        <div class="category-controls">
+                            <input type="text" id="newCategoryName" placeholder="カテゴリ名" maxlength="50">
+                            <!-- 2025-06-22 修正: セレクトボタン形式に変更 -->
+                            <div class="category-type-selector">
+                                <button type="button" class="category-type-btn active" data-type="node">ノード</button>
+                                <button type="button" class="category-type-btn" data-type="link">リンク</button>
+                            </div>
+                            <input type="hidden" id="newCategoryType" value="node">
+                            <!-- 2025-06-22 追加: パレット選択機能 -->
+                            <label>配色パレット:</label>
+                            <select id="categoryPaletteSelector">
+                                <option value="モノクロ">モノクロ</option>
+                                <option value="レインボー" selected>レインボー</option>
+                                <option value="パステル">パステル</option>
+                                <option value="ビビッド">ビビッド</option>
+                                <option value="ナチュラル">ナチュラル</option>
+                                <option value="カフェ">カフェ</option>
+                            </select>
+                            <div id="newCategoryColorPalette" class="color-palette-mini"></div>
+                            <input type="hidden" id="newCategoryColor" value="#e74c3c">
+                            <button id="addCategoryBtn" class="btn btn-small">追加</button>
+                        </div>
+                        <!-- 2025-06-22 追加: カテゴリ管理ボタン -->
+                        <button id="manageCategoriesBtn" class="btn btn-primary" style="margin-top: 10px;">📋 カテゴリ管理</button>
+                        <div id="categoryList" class="category-list">
+                            <!-- カテゴリリストはJavaScriptで動的生成 -->
+                        </div>
+                    </div>
+                    
+                    <!-- フォース設定 -->
+                    <div id="forceSettings" class="property-group">
+                        <h4>フォース設定</h4>
+                        <label>中心引力: <span id="centerForceValue">0.3</span></label>
+                        <input type="range" id="centerForce" min="0" max="1" step="0.1" value="0.3">
+                        
+                        <label>反発力: <span id="chargeForceValue">-300</span></label>
+                        <input type="range" id="chargeForce" min="-1000" max="0" step="50" value="-300">
+                        
+                        <label>リンク距離: <span id="linkDistanceValue">100</span></label>
+                        <input type="range" id="linkDistance" min="20" max="300" step="10" value="100">
+                        
+                        <label>リンク強度: <span id="linkStrengthValue">1</span></label>
+                        <input type="range" id="linkStrength" min="0" max="2" step="0.1" value="1">
+                    </div>
+                </div>
+            </aside>
+        </main>
+        
+        <!-- ステータスバー -->
+        <footer class="status-bar">
+            <div class="status-left">
+                <span id="nodeCount">ノード: 0</span>
+                <span id="linkCount">リンク: 0</span>
+                <span id="mousePos">座標: (0, 0)</span>
+            </div>
+            <div class="status-right">
+                <span id="zoomLevel">100%</span>
+                <span id="mode">選択モード</span>
+            </div>
+        </footer>
+        
+        <!-- デバッグパネル -->
+        <div class="debug-panel" id="debugPanel">
+            <!-- デバッグコンテンツはwordmap-debug.jsで動的生成 -->
+        </div>
+        
+        <!-- ヘルプモーダル -->
+        <div class="modal-overlay hidden" id="helpModal">
+            <div class="modal-content help-modal">
+                <div class="modal-header">
+                    <h3>キーボードショートカット</h3>
+                    <button class="modal-close" id="helpModalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="help-sections">
+                        <div class="help-section">
+                            <h4>基本操作</h4>
+                            <div class="shortcut-list">
+                                <div class="shortcut-item"><kbd>Ctrl+S</kbd><span>保存</span></div>
+                                <div class="shortcut-item"><kbd>Ctrl+O</kbd><span>読み込み</span></div>
+                                <div class="shortcut-item"><kbd>Delete</kbd><span>選択削除</span></div>
+                                <div class="shortcut-item"><kbd>Escape</kbd><span>選択解除</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="help-section">
+                            <h4>表示操作</h4>
+                            <div class="shortcut-list">
+                                <div class="shortcut-item"><kbd>Ctrl++</kbd><span>ズームイン</span></div>
+                                <div class="shortcut-item"><kbd>Ctrl+-</kbd><span>ズームアウト</span></div>
+                                <div class="shortcut-item"><kbd>F</kbd><span>全体表示</span></div>
+                                <div class="shortcut-item"><kbd>R</kbd><span>レイアウトリセット</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="help-section">
+                            <h4>編集操作</h4>
+                            <div class="shortcut-list">
+                                <div class="shortcut-item"><kbd>Ctrl+クリック</kbd><span>複数選択</span></div>
+                                <div class="shortcut-item"><kbd>H</kbd><span>ヘルプ表示</span></div>
+                                <div class="shortcut-item"><kbd>T</kbd><span>テーマ切替</span></div>
+                            </div>
+                        </div>
+                        
+                        <div class="help-section">
+                            <h4>マウス操作</h4>
+                            <div class="shortcut-list">
+                                <div class="shortcut-item"><span class="mouse-action">背景ダブルクリック</span><span>ノード作成</span></div>
+                                <div class="shortcut-item"><span class="mouse-action">ノードクリック</span><span>ノード選択（基点移動）</span></div>
+                                <div class="shortcut-item"><span class="mouse-action">Shift+ノードクリック</span><span>選択ノードからリンク作成</span></div>
+                                <div class="shortcut-item"><span class="mouse-action">ドラッグ</span><span>ノード移動</span></div>
+                                <div class="shortcut-item"><span class="mouse-action">Ctrl+スクロール</span><span>ズーム</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="helpCloseBtn">閉じる</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 2025-06-22 追加: カテゴリ管理モーダル -->
+        <div class="modal-overlay hidden" id="categoryManageModal">
+            <div class="modal-content category-manage-modal">
+                <div class="modal-header">
+                    <h3>カテゴリ管理</h3>
+                    <button class="modal-close" id="categoryManageModalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="categoryManageList" class="category-manage-list">
+                        <!-- カテゴリ管理リストはJavaScriptで動的生成 -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="categoryManageCloseBtn">閉じる</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 2025-07-06 追加: クリア確認モーダル -->
+        <div class="modal-overlay hidden" id="clearModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>⚠️ 全データクリア</h3>
+                    <button class="modal-close" id="clearModalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>すべてのノードとリンクが削除されます。</p>
+                    <p>この操作は取り消すことができません。</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-primary" id="clearSaveBtn">💾 保存してクリア</button>
+                    <button class="btn btn-danger" id="clearConfirmBtn">🗑️ クリア実行</button>
+                    <button class="btn btn-secondary" id="clearCancelBtn">キャンセル</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // モジュール依存関係チェック
+        function checkDependencies() {
+            const required = ['CONFIG', 'WordMapUtils', 'D3WordMapEditor', 'WordMapUI', 'WordMapIO'];
+            const missing = [];
+            
+            required.forEach(dep => {
+                if (typeof window[dep] === 'undefined') {
+                    missing.push(dep);
+                }
+            });
+            
+            if (missing.length > 0) {
+                console.error('必須モジュールが見つかりません:', missing.join(', '));
+                return false;
+            }
+            
+            return true;
+        }
+
+        // デバッグモジュール動的読み込み
+        async function loadDebugModule() {
+            try {
+                const debugMode = CONFIG.DEBUG?.MODE || 'lite';
+                let debugScript = '';
+                
+                switch (debugMode) {
+                    case 'lite':
+                        debugScript = 'wordmap-debug-lite.js';
+                        break;
+                    case 'dev':
+                        debugScript = 'wordmap-debug-dev.js';
+                        break;
+                    case 'full':
+                        debugScript = 'wordmap-debug-full.js';
+                        break;
+                    default:
+                        debugScript = 'wordmap-debug-lite.js';
+                }
+
+                console.log(`[DEBUG] デバッグモジュール読み込み中: ${debugScript}`);
+                
+                // スクリプトを動的に読み込み
+                const script = document.createElement('script');
+                script.src = debugScript;
+                script.onload = () => {
+                    initializeDebugModule(debugMode);
+                };
+                script.onerror = () => {
+                    console.warn(`[DEBUG] ${debugScript}の読み込みに失敗、フォールバック実行`);
+                    setupFallbackDebug();
+                };
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                console.error('[DEBUG] デバッグモジュール読み込みエラー:', error);
+                setupFallbackDebug();
+            }
+        }
+
+        // デバッグモジュール初期化
+        function initializeDebugModule(mode) {
+            try {
+                let DebugClass;
+                
+                switch (mode) {
+                    case 'lite':
+                        DebugClass = window.WordMapDebugLite;
+                        break;
+                    case 'dev':
+                        DebugClass = window.WordMapDebugDev;
+                        break;
+                    case 'full':
+                        DebugClass = window.WordMapDebug;
+                        break;
+                    default:
+                        DebugClass = window.WordMapDebugLite;
+                }
+
+                if (DebugClass) {
+                    window.wordMapEditor.debugModule = new DebugClass(window.wordMapEditor);
+                    window.wordMapEditor.toggleDebug = function() {
+                        if (this.debugModule) {
+                            this.debugModule.toggle();
+                        } else {
+                            console.error('デバッグモジュールが利用できません');
+                        }
+                    };
+                    console.log(`[DEBUG] デバッグモジュール初期化完了 (${mode})`);
+                } else {
+                    throw new Error(`デバッグクラスが見つかりません: ${mode}`);
+                }
+                
+            } catch (error) {
+                console.error('[DEBUG] デバッグモジュール初期化エラー:', error);
+                setupFallbackDebug();
+            }
+        }
+
+        // フォールバック用ダミーデバッグ
+        function setupFallbackDebug() {
+            window.wordMapEditor.toggleDebug = function() {
+                console.warn('デバッグモジュールが利用できません');
+            };
+            console.log('[DEBUG] フォールバックデバッグ機能設定完了');
+        }
+        
+        // モジュール読み込みエラーハンドリング
+        window.addEventListener('modulesLoadError', function(event) {
+            console.error('モジュール読み込みエラー:', event.detail.error);
+            alert('モジュールの読み込みに失敗しました: ' + event.detail.error);
+        });
+        
+        // アプリケーション初期化 - モジュール読み込み完了を待つ
+        window.addEventListener('modulesLoaded', function(event) {
+            console.log('ワードマップエディター（モジュール版）初期化開始');
+            console.log('モジュール読み込み状況:', event.detail.status);
+            
+            // 依存関係チェック
+            if (!checkDependencies()) {
+                alert('必要なモジュールの読み込みに失敗しました。ページを再読み込みしてください。');
+                return;
+            }
+            
+            try {
+                // エディターインスタンス作成
+                window.wordMapEditor = new D3WordMapEditor('wordmapSvg');
+                
+                // UIモジュールの初期化
+                if (typeof WordMapUI !== 'undefined') {
+                    const ui = new WordMapUI(window.wordMapEditor);
+                    window.wordMapEditor.uiModule = ui;  // UIモジュールへの参照を保持
+                    ui.initialize();
+                    
+                    // UIメソッドをエディターに統合
+                    window.wordMapEditor.updatePropertiesPanel = ui.updatePropertiesPanel.bind(ui);
+                    window.wordMapEditor.updateSelectedNode = ui.updateSelectedNode.bind(ui);
+                    window.wordMapEditor.updateSelectedLink = ui.updateSelectedLink.bind(ui);
+                    window.wordMapEditor.updateSelectedLinkStyle = ui.updateSelectedLinkStyle.bind(ui);
+                    // 2025-06-21 追加: 複数選択一括編集関数の統合
+                    window.wordMapEditor.updateMultiSelectedElements = ui.updateMultiSelectedElements.bind(ui);
+                    
+                    console.log('UIモジュール初期化完了');
+                }
+                
+                // IOモジュールの初期化
+                if (typeof WordMapIO !== 'undefined') {
+                    window.wordMapEditor.ioModule = WordMapIO.initialize(window.wordMapEditor);
+                    console.log('IOモジュール初期化完了');
+                }
+                
+                // デバッグモジュールの動的読み込み
+                loadDebugModule();
+                
+                // モーダルクローズイベント（ヘルプモーダル）
+                document.getElementById('helpModalClose')?.addEventListener('click', () => {
+                    document.getElementById('helpModal')?.classList.add('hidden');
+                });
+                
+                document.getElementById('helpCloseBtn')?.addEventListener('click', () => {
+                    document.getElementById('helpModal')?.classList.add('hidden');
+                });
+                
+                // Escapeキーでモーダルを閉じる
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'Escape') {
+                        const helpModal = document.getElementById('helpModal');
+                        if (helpModal && !helpModal.classList.contains('hidden')) {
+                            helpModal.classList.add('hidden');
+                        }
+                    }
+                });
+                
+                // 初期化完了後の動作確認
+                console.log('初期化完了後の状態:', {
+                    editor: !!window.wordMapEditor,
+                    ui: !!window.wordMapEditor.uiModule,
+                    io: !!window.wordMapEditor.ioModule,
+                    debug: !!window.wordMapEditor.debugModule,
+                    nodes: window.wordMapEditor.data.nodes.length,
+                    links: window.wordMapEditor.data.links.length,
+                    WordMapDebugClass: typeof WordMapDebug !== 'undefined'
+                });
+                
+                console.log('ワードマップエディター（モジュール版）初期化成功');
+            } catch (error) {
+                console.error('初期化エラー:', error);
+                alert('アプリケーションの初期化に失敗しました: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

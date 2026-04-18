@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>森 — みんなの自己紹介</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  
+  :root {
+    --paper: #f4ede0;
+    --paper-dark: #e8dcc6;
+    --ink: #1f1a15;
+    --ink-soft: #4a3f32;
+    --moss: #5a6b3e;
+    --moss-deep: #3a4828;
+    --bark: #6b4a2b;
+    --bark-dark: #3d2817;
+    --root: #8b6a4a;
+    --gold: #c49a3e;
+    --bud: #d4694a;
+    --bloom: #e8a298;
+    --mist: rgba(244, 237, 224, 0.85);
+    --line: rgba(196, 154, 62, 0.35);
+  }
+  
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Shippori Mincho', serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  
+  body {
+    background: 
+      radial-gradient(ellipse at 20% 0%, rgba(196, 154, 62, 0.08) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(90, 107, 62, 0.12) 0%, transparent 60%),
+      linear-gradient(180deg, #f6f0e2 0%, #ede3cf 100%);
+    position: relative;
+  }
+  
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      radial-gradient(circle at 25% 30%, rgba(61, 40, 23, 0.015) 1px, transparent 1px),
+      radial-gradient(circle at 75% 70%, rgba(61, 40, 23, 0.015) 1px, transparent 1px);
+    background-size: 3px 3px, 5px 5px;
+    pointer-events: none;
+    z-index: 1;
+  }
+  
+  #app {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+  }
+  
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  
+  .screen.active {
+    display: flex;
+    opacity: 1;
+  }
+  
+  /* ===== WELCOME SCREEN ===== */
+  #screen-welcome {
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    text-align: center;
+  }
+  
+  .title-mark {
+    font-size: clamp(4rem, 20vw, 8rem);
+    font-weight: 400;
+    letter-spacing: 0.15em;
+    color: var(--moss-deep);
+    margin-bottom: 0.5rem;
+    line-height: 1;
+  }
+  
+  .subtitle {
+    font-family: 'Klee One', serif;
+    font-size: 0.95rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+    margin-bottom: 3rem;
+    line-height: 1.9;
+  }
+  
+  .welcome-illustration {
+    width: min(280px, 60vw);
+    height: min(280px, 60vw);
+    margin-bottom: 2rem;
+  }
+  
+  .btn-primary {
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.05rem;
+    padding: 0.9rem 2.5rem;
+    background: var(--moss-deep);
+    color: var(--paper);
+    border: none;
+    border-radius: 0;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border: 1px solid var(--moss-deep);
+    opacity: 0.4;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover::before {
+    inset: -8px;
+    opacity: 0.6;
+  }
+  
+  .btn-primary:active {
+    transform: translateY(1px);
+  }
+  
+  /* ===== BUILD SCREEN ===== */
+  #screen-build {
+    padding: 1rem;
+    gap: 0.75rem;
+  }
+  
+  .build-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+  }
+  
+  .back-link {
+    font-family: 'Klee One', serif;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+    background: none;
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+  }
+  
+  .step-label {
+    font-family: 'Klee One', serif;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.15em;
+  }
+  
+  .tree-canvas-container {
+    flex: 1;
+    position: relative;
+    background: rgba(255, 252, 244, 0.5);
+    border: 1px solid rgba(90, 107, 62, 0.15);
+    overflow: hidden;
+    min-height: 200px;
+  }
+  
+  .tree-canvas-container::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40%;
+    background: linear-gradient(180deg, transparent 0%, rgba(90, 107, 62, 0.04) 100%);
+    pointer-events: none;
+  }
+  
+  #tree-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  
+  .tree-label {
+    position: absolute;
+    bottom: 0.75rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Klee One', serif;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  
+  .input-panel {
+    background: rgba(255, 252, 244, 0.9);
+    padding: 0.9rem;
+    border-top: 1px solid rgba(90, 107, 62, 0.15);
+  }
+  
+  .name-input {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1rem;
+    border: none;
+    border-bottom: 1px solid var(--ink-soft);
+    background: transparent;
+    color: var(--ink);
+    outline: none;
+    margin-bottom: 0.75rem;
+  }
+  
+  .name-input::placeholder {
+    color: rgba(74, 63, 50, 0.4);
+  }
+  
+  .category-tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.6rem;
+  }
+  
+  .cat-tab {
+    flex: 1;
+    padding: 0.55rem 0.3rem;
+    font-family: 'Klee One', serif;
+    font-size: 0.82rem;
+    border: 1px solid rgba(74, 63, 50, 0.2);
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+  }
+  
+  .cat-tab.active[data-cat="roots"] {
+    background: var(--root);
+    color: var(--paper);
+    border-color: var(--root);
+  }
+  
+  .cat-tab.active[data-cat="interest"] {
+    background: var(--moss);
+    color: var(--paper);
+    border-color: var(--moss);
+  }
+  
+  .cat-tab.active[data-cat="future"] {
+    background: var(--bud);
+    color: var(--paper);
+    border-color: var(--bud);
+  }
+  
+  .keyword-row {
+    display: flex;
+    gap: 0.4rem;
+  }
+  
+  .keyword-input {
+    flex: 1;
+    padding: 0.65rem 0.8rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 0.95rem;
+    border: 1px solid rgba(74, 63, 50, 0.25);
+    background: white;
+    color: var(--ink);
+    outline: none;
+  }
+  
+  .keyword-input:focus {
+    border-color: var(--moss);
+  }
+  
+  .add-btn {
+    padding: 0.65rem 1.1rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.1rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    min-width: 48px;
+  }
+  
+  .keyword-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.6rem;
+    max-height: 80px;
+    overflow-y: auto;
+  }
+  
+  .kw-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+    font-family: 'Klee One', serif;
+    font-size: 0.82rem;
+    color: var(--ink);
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid;
+    cursor: default;
+  }
+  
+  .kw-chip[data-cat="roots"] { border-color: var(--root); }
+  .kw-chip[data-cat="interest"] { border-color: var(--moss); }
+  .kw-chip[data-cat="future"] { border-color: var(--bud); }
+  
+  .kw-chip .remove {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-soft);
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.2rem;
+  }
+  
+  .build-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+  
+  .btn-secondary {
+    flex: 1;
+    padding: 0.7rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 0.9rem;
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--ink-soft);
+    cursor: pointer;
+    letter-spacing: 0.15em;
+  }
+  
+  .btn-plant {
+    flex: 2;
+    padding: 0.7rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 0.95rem;
+    background: var(--moss-deep);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+  }
+  
+  .btn-plant:disabled {
+    background: rgba(58, 72, 40, 0.3);
+    cursor: not-allowed;
+  }
+  
+  /* ===== FOREST SCREEN ===== */
+  #screen-forest {
+    padding: 0;
+  }
+  
+  .forest-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(180deg, var(--mist) 0%, transparent 100%);
+    pointer-events: none;
+  }
+  
+  .forest-header > * {
+    pointer-events: auto;
+  }
+  
+  .forest-title {
+    font-size: 1.15rem;
+    color: var(--moss-deep);
+    letter-spacing: 0.25em;
+  }
+  
+  .forest-count {
+    font-family: 'Klee One', serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+  }
+  
+  .forest-canvas-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+  
+  #forest-canvas {
+    display: block;
+    cursor: grab;
+  }
+  
+  #forest-canvas:active {
+    cursor: grabbing;
+  }
+  
+  .forest-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(0deg, var(--mist) 0%, transparent 100%);
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+  }
+  
+  .btn-add-tree {
+    padding: 0.75rem 1.5rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 0.9rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+  }
+  
+  .btn-toggle {
+    padding: 0.75rem 1rem;
+    font-family: 'Klee One', serif;
+    font-size: 0.8rem;
+    background: rgba(255, 252, 244, 0.9);
+    color: var(--ink-soft);
+    border: 1px solid var(--ink-soft);
+    cursor: pointer;
+    letter-spacing: 0.08em;
+  }
+  
+  .btn-toggle.on {
+    background: var(--gold);
+    color: var(--paper);
+    border-color: var(--gold);
+  }
+  
+  /* ===== DETAIL OVERLAY ===== */
+  .detail-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(31, 26, 21, 0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: flex-end;
+    z-index: 20;
+  }
+  
+  .detail-overlay.active {
+    display: flex;
+    animation: fadeIn 0.3s ease;
+  }
+  
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  .detail-panel {
+    width: 100%;
+    background: var(--paper);
+    padding: 1.5rem 1.25rem 2rem;
+    max-height: 70vh;
+    overflow-y: auto;
+    animation: slideUp 0.35s cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  
+  .detail-name {
+    font-size: 1.5rem;
+    color: var(--moss-deep);
+    margin-bottom: 0.25rem;
+    letter-spacing: 0.1em;
+  }
+  
+  .detail-meta {
+    font-family: 'Klee One', serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 1rem;
+    letter-spacing: 0.05em;
+  }
+  
+  .detail-section {
+    margin-bottom: 1rem;
+  }
+  
+  .detail-section-title {
+    font-family: 'Klee One', serif;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.15em;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .detail-section-title::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+  
+  .detail-section[data-cat="roots"] .detail-section-title::before { background: var(--root); }
+  .detail-section[data-cat="interest"] .detail-section-title::before { background: var(--moss); }
+  .detail-section[data-cat="future"] .detail-section-title::before { background: var(--bud); }
+  
+  .detail-keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  
+  .detail-kw {
+    padding: 0.35rem 0.7rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 0.9rem;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(74, 63, 50, 0.2);
+  }
+  
+  .detail-connections {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed rgba(74, 63, 50, 0.2);
+  }
+  
+  .detail-connection-item {
+    padding: 0.5rem 0;
+    font-family: 'Klee One', serif;
+    font-size: 0.88rem;
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  
+  .detail-connection-item em {
+    font-style: normal;
+    color: var(--gold);
+    font-weight: 600;
+  }
+  
+  .close-btn {
+    position: absolute;
+    top: 0.75rem;
+    right: 1rem;
+    font-family: 'Shippori Mincho', serif;
+    font-size: 1.5rem;
+    color: var(--ink-soft);
+    background: none;
+    border: none;
+    cursor: pointer;
+    line-height: 1;
+  }
+  
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed;
+    bottom: 5rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 0.7rem 1.3rem;
+    font-family: 'Klee One', serif;
+    font-size: 0.88rem;
+    letter-spacing: 0.08em;
+    z-index: 30;
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+    pointer-events: none;
+  }
+  
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  
+  /* ===== UTILITY ===== */
+  @media (min-width: 768px) {
+    .build-header { padding: 0.5rem 1rem; }
+    #screen-build { padding: 1.5rem; max-width: 600px; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  
+  <!-- WELCOME SCREEN -->
+  <section id="screen-welcome" class="screen active">
+    <svg class="welcome-illustration" viewBox="0 0 200 200">
+      <!-- Decorative seed/tree -->
+      <g transform="translate(100, 100)">
+        <circle r="60" fill="none" stroke="rgba(90, 107, 62, 0.15)" stroke-width="0.5"/>
+        <circle r="45" fill="none" stroke="rgba(90, 107, 62, 0.2)" stroke-width="0.5" stroke-dasharray="2 3"/>
+        <!-- Roots -->
+        <path d="M 0 30 Q -5 40 -15 48 M 0 30 Q 3 42 10 50 M 0 30 Q -2 45 -5 55" 
+              stroke="#8b6a4a" stroke-width="1" fill="none" stroke-linecap="round"/>
+        <!-- Trunk -->
+        <path d="M 0 30 Q -2 10 0 -10" stroke="#6b4a2b" stroke-width="3" fill="none" stroke-linecap="round"/>
+        <!-- Branches -->
+        <path d="M 0 -5 Q -15 -15 -25 -25 M 0 -5 Q 15 -12 22 -28 M 0 -15 Q -12 -25 -18 -40 M 0 -15 Q 14 -28 20 -42" 
+              stroke="#5a6b3e" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <!-- Leaves -->
+        <circle cx="-25" cy="-25" r="3" fill="#5a6b3e" opacity="0.7"/>
+        <circle cx="22" cy="-28" r="3" fill="#5a6b3e" opacity="0.7"/>
+        <circle cx="-18" cy="-40" r="3" fill="#c49a3e" opacity="0.7"/>
+        <circle cx="20" cy="-42" r="3" fill="#d4694a" opacity="0.7"/>
+      </g>
+    </svg>
+    <h1 class="title-mark">森</h1>
+    <p class="subtitle">
+      ひとりが一本の樹になり、<br>
+      クラスはひとつの森になる。<br>
+      自分を、キーワードで植える。
+    </p>
+    <button class="btn-primary" onclick="goToBuild()">樹を植える</button>
+  </section>
+  
+  <!-- BUILD SCREEN -->
+  <section id="screen-build" class="screen">
+    <div class="build-header">
+      <button class="back-link" onclick="goToWelcome()">← もどる</button>
+      <span class="step-label">自分の樹をそだてる</span>
+      <button class="back-link" onclick="goToForest()">森へ →</button>
+    </div>
+    
+    <div class="tree-canvas-container">
+      <canvas id="tree-canvas"></canvas>
+      <div class="tree-label" id="tree-label"></div>
+    </div>
+    
+    <div class="input-panel">
+      <input type="text" class="name-input" id="name-input" placeholder="あなたの名前(またはニックネーム)" maxlength="20">
+      
+      <div class="category-tabs">
+        <button class="cat-tab active" data-cat="roots" onclick="selectCat('roots')">ルーツ・過去</button>
+        <button class="cat-tab" data-cat="interest" onclick="selectCat('interest')">いま・興味</button>
+        <button class="cat-tab" data-cat="future" onclick="selectCat('future')">これから</button>
+      </div>
+      
+      <div class="keyword-row">
+        <input type="text" class="keyword-input" id="keyword-input" placeholder="キーワード(例:静岡出身、パン作り、旅をしたい…)" maxlength="20">
+        <button class="add-btn" onclick="addKeyword()">＋</button>
+      </div>
+      
+      <div class="keyword-list" id="keyword-list"></div>
+      
+      <div class="build-actions">
+        <button class="btn-secondary" onclick="clearTree()">消す</button>
+        <button class="btn-plant" id="plant-btn" onclick="plantTree()" disabled>森に植える</button>
+      </div>
+    </div>
+  </section>
+  
+  <!-- FOREST SCREEN -->
+  <section id="screen-forest" class="screen">
+    <div class="forest-header">
+      <span class="forest-title">森</span>
+      <span class="forest-count" id="forest-count">0本の樹</span>
+    </div>
+    
+    <div class="forest-canvas-container">
+      <canvas id="forest-canvas"></canvas>
+    </div>
+    
+    <div class="forest-footer">
+      <button class="btn-toggle on" id="toggle-connections" onclick="toggleConnections()">つながり</button>
+      <button class="btn-add-tree" onclick="goToBuild()">+ 樹を植える</button>
+    </div>
+  </section>
+  
+  <!-- DETAIL OVERLAY -->
+  <div class="detail-overlay" id="detail-overlay">
+    <div class="detail-panel">
+      <button class="close-btn" onclick="closeDetail()">×</button>
+      <h2 class="detail-name" id="detail-name"></h2>
+      <div class="detail-meta" id="detail-meta"></div>
+      <div id="detail-sections"></div>
+      <div class="detail-connections" id="detail-connections-wrap" style="display:none">
+        <div class="detail-section-title" style="letter-spacing:0.15em;margin-bottom:0.75rem;">つながり</div>
+        <div id="detail-connections"></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ============ STATE ============
+const state = {
+  currentScreen: 'welcome',
+  currentCat: 'roots',
+  myTree: {
+    id: null,
+    name: '',
+    keywords: [] // [{text, cat}]
+  },
+  trees: [], // all trees from storage
+  showConnections: true,
+  forest: {
+    offsetX: 0,
+    offsetY: 0,
+    scale: 1,
+    isDragging: false,
+    dragStart: null
+  }
+};
+
+// ============ STORAGE ============
+async function loadAllTrees() {
+  try {
+    const result = await window.storage.list('tree:', true);
+    if (!result || !result.keys) return [];
+    const trees = [];
+    for (const key of result.keys) {
+      try {
+        const r = await window.storage.get(key, true);
+        if (r && r.value) {
+          trees.push(JSON.parse(r.value));
+        }
+      } catch (e) { /* skip */ }
+    }
+    return trees.sort((a, b) => a.createdAt - b.createdAt);
+  } catch (e) {
+    console.error('load error', e);
+    return [];
+  }
+}
+
+async function saveTree(tree) {
+  try {
+    await window.storage.set(`tree:${tree.id}`, JSON.stringify(tree), true);
+    return true;
+  } catch (e) {
+    console.error('save error', e);
+    return false;
+  }
+}
+
+// ============ NAVIGATION ============
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`screen-${name}`).classList.add('active');
+  state.currentScreen = name;
+}
+
+function goToWelcome() { showScreen('welcome'); }
+
+function goToBuild() {
+  showScreen('build');
+  // reset or keep current tree?
+  renderMyTree();
+  renderKeywordList();
+  updatePlantButton();
+  setTimeout(() => setupTreeCanvas(), 50);
+}
+
+async function goToForest() {
+  showScreen('forest');
+  state.trees = await loadAllTrees();
+  document.getElementById('forest-count').textContent = `${state.trees.length}本の樹`;
+  setTimeout(() => {
+    setupForestCanvas();
+    centerForest();
+    renderForest();
+  }, 50);
+}
+
+// ============ BUILD SCREEN ============
+function selectCat(cat) {
+  state.currentCat = cat;
+  document.querySelectorAll('.cat-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.cat === cat);
+  });
+}
+
+function addKeyword() {
+  const input = document.getElementById('keyword-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (state.myTree.keywords.length >= 20) {
+    showToast('キーワードは最大20個まで');
+    return;
+  }
+  state.myTree.keywords.push({ text, cat: state.currentCat });
+  input.value = '';
+  renderKeywordList();
+  renderMyTree();
+  updatePlantButton();
+}
+
+function removeKeyword(idx) {
+  state.myTree.keywords.splice(idx, 1);
+  renderKeywordList();
+  renderMyTree();
+  updatePlantButton();
+}
+
+function renderKeywordList() {
+  const list = document.getElementById('keyword-list');
+  list.innerHTML = state.myTree.keywords.map((kw, i) => `
+    <span class="kw-chip" data-cat="${kw.cat}">
+      ${escapeHtml(kw.text)}
+      <button class="remove" onclick="removeKeyword(${i})">×</button>
+    </span>
+  `).join('');
+}
+
+function clearTree() {
+  if (state.myTree.keywords.length === 0 && !state.myTree.name) return;
+  if (!confirm('入力した内容を消しますか?')) return;
+  state.myTree = { id: null, name: '', keywords: [] };
+  document.getElementById('name-input').value = '';
+  renderKeywordList();
+  renderMyTree();
+  updatePlantButton();
+}
+
+function updatePlantButton() {
+  const name = document.getElementById('name-input').value.trim();
+  const btn = document.getElementById('plant-btn');
+  btn.disabled = !name || state.myTree.keywords.length < 2;
+}
+
+async function plantTree() {
+  const name = document.getElementById('name-input').value.trim();
+  if (!name || state.myTree.keywords.length < 2) return;
+  
+  state.myTree.name = name;
+  state.myTree.id = state.myTree.id || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  state.myTree.createdAt = state.myTree.createdAt || Date.now();
+  
+  const ok = await saveTree(state.myTree);
+  if (ok) {
+    showToast('森に植えました');
+    // reset for next user
+    const savedName = state.myTree.name;
+    state.myTree = { id: null, name: '', keywords: [] };
+    document.getElementById('name-input').value = '';
+    renderKeywordList();
+    setTimeout(() => goToForest(), 600);
+  } else {
+    showToast('保存に失敗しました');
+  }
+}
+
+// ============ TREE DRAWING ============
+// Seeded random for consistent tree shapes
+function seededRandom(seed) {
+  let s = seed;
+  return () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function stringHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h) || 1;
+}
+
+function setupTreeCanvas() {
+  const canvas = document.getElementById('tree-canvas');
+  const container = canvas.parentElement;
+  const rect = container.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  renderMyTree();
+}
+
+function renderMyTree() {
+  const canvas = document.getElementById('tree-canvas');
+  if (!canvas.width) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width / dpr;
+  const H = canvas.height / dpr;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  const name = document.getElementById('name-input').value.trim() || '?';
+  const tree = { name, keywords: state.myTree.keywords, id: state.myTree.id || name };
+  
+  const centerX = W / 2;
+  const groundY = H * 0.72;
+  
+  drawTree(ctx, tree, centerX, groundY, Math.min(W, H) * 0.9);
+  
+  // label
+  document.getElementById('tree-label').textContent = name === '?' ? '' : name;
+}
+
+// Main tree drawing function
+function drawTree(ctx, tree, cx, groundY, size) {
+  const seed = stringHash(tree.id || tree.name);
+  const rng = seededRandom(seed);
+  
+  const roots = tree.keywords.filter(k => k.cat === 'roots');
+  const interests = tree.keywords.filter(k => k.cat === 'interest');
+  const futures = tree.keywords.filter(k => k.cat === 'future');
+  
+  const trunkH = size * 0.35;
+  const trunkTop = groundY - trunkH;
+  const trunkCurveX = cx + (rng() - 0.5) * size * 0.03;
+  
+  // ===== ROOTS (downward) =====
+  roots.forEach((kw, i) => {
+    const n = roots.length;
+    const angleSpread = Math.PI * 0.55;
+    const baseAngle = Math.PI / 2 - angleSpread / 2 + (angleSpread * (i + 0.5)) / n;
+    const angle = baseAngle + (rng() - 0.5) * 0.2;
+    const len = size * (0.12 + rng() * 0.08);
+    const endX = cx + Math.cos(angle) * len;
+    const endY = groundY + Math.sin(angle) * len;
+    
+    ctx.strokeStyle = '#8b6a4a';
+    ctx.lineWidth = 2 + rng() * 1.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx, groundY);
+    const mx = cx + Math.cos(angle) * len * 0.5 + (rng() - 0.5) * 8;
+    const my = groundY + Math.sin(angle) * len * 0.5;
+    ctx.quadraticCurveTo(mx, my, endX, endY);
+    ctx.stroke();
+    
+    // Root tip text
+    drawKwLabel(ctx, kw.text, endX, endY, 'roots', angle > Math.PI / 2);
+  });
+  
+  // ===== TRUNK =====
+  ctx.strokeStyle = '#6b4a2b';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx, groundY);
+  ctx.quadraticCurveTo(trunkCurveX - 4, (groundY + trunkTop) / 2, trunkCurveX, trunkTop);
+  ctx.stroke();
+  
+  // Trunk texture - subtle vertical lines
+  ctx.strokeStyle = 'rgba(61, 40, 23, 0.3)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 3; i++) {
+    const offset = (i - 1) * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + offset, groundY - 2);
+    ctx.quadraticCurveTo(trunkCurveX - 4 + offset, (groundY + trunkTop) / 2, trunkCurveX + offset, trunkTop + 2);
+    ctx.stroke();
+  }
+  
+  // Ground line
+  ctx.strokeStyle = 'rgba(107, 74, 43, 0.2)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.3, groundY);
+  ctx.lineTo(cx + size * 0.3, groundY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // ===== INTEREST BRANCHES (middle) =====
+  const interestCount = interests.length;
+  interests.forEach((kw, i) => {
+    const t = interestCount === 1 ? 0.5 : i / (interestCount - 1 + 0.001);
+    const yOnTrunk = trunkTop + trunkH * 0.3 + (1 - t) * trunkH * 0.5;
+    const xOnTrunk = cx + (yOnTrunk - trunkTop) / trunkH * (trunkCurveX - cx);
+    const side = i % 2 === 0 ? -1 : 1;
+    const baseAngle = side * (Math.PI / 2.6 + rng() * 0.3);
+    const len = size * (0.18 + rng() * 0.1);
+    const endX = xOnTrunk + Math.cos(-Math.PI/2 + baseAngle) * len;
+    const endY = yOnTrunk + Math.sin(-Math.PI/2 + baseAngle) * len;
+    
+    // Branch
+    ctx.strokeStyle = '#6b4a2b';
+    ctx.lineWidth = 2.5 + rng();
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xOnTrunk, yOnTrunk);
+    const cpx = xOnTrunk + Math.cos(-Math.PI/2 + baseAngle * 0.6) * len * 0.5;
+    const cpy = yOnTrunk + Math.sin(-Math.PI/2 + baseAngle * 0.6) * len * 0.5 - 5;
+    ctx.quadraticCurveTo(cpx, cpy, endX, endY);
+    ctx.stroke();
+    
+    // Leaf cluster at tip
+    drawLeafCluster(ctx, endX, endY, '#5a6b3e', 6 + rng() * 3, rng);
+    
+    drawKwLabel(ctx, kw.text, endX, endY - 8, 'interest', side < 0);
+  });
+  
+  // ===== FUTURE BRANCHES (upper, reaching up) =====
+  const futureCount = futures.length;
+  futures.forEach((kw, i) => {
+    const n = futureCount;
+    const angleSpread = Math.PI * 0.7;
+    const baseAngle = -Math.PI / 2 - angleSpread / 2 + (angleSpread * (i + 0.5)) / n;
+    const angle = baseAngle + (rng() - 0.5) * 0.15;
+    const len = size * (0.2 + rng() * 0.08);
+    const startX = trunkCurveX;
+    const startY = trunkTop;
+    const endX = startX + Math.cos(angle) * len;
+    const endY = startY + Math.sin(angle) * len;
+    
+    // Branch
+    ctx.strokeStyle = '#6b4a2b';
+    ctx.lineWidth = 2 + rng();
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(startX, startY);
+    const cpx = startX + Math.cos(angle - 0.1) * len * 0.6;
+    const cpy = startY + Math.sin(angle - 0.1) * len * 0.6;
+    ctx.quadraticCurveTo(cpx, cpy, endX, endY);
+    ctx.stroke();
+    
+    // Bud/flower at tip
+    drawBud(ctx, endX, endY, rng);
+    
+    drawKwLabel(ctx, kw.text, endX, endY - 10, 'future', baseAngle < -Math.PI / 2);
+  });
+  
+  // If no keywords, show a sapling hint
+  if (tree.keywords.length === 0) {
+    ctx.fillStyle = 'rgba(74, 63, 50, 0.3)';
+    ctx.font = "italic 13px 'Klee One', serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('キーワードを追加すると枝が伸びます', cx, trunkTop - 20);
+  }
+}
+
+function drawLeafCluster(ctx, x, y, color, size, rng) {
+  const count = 3 + Math.floor(rng() * 3);
+  for (let i = 0; i < count; i++) {
+    const a = (Math.PI * 2 * i) / count + rng() * 0.5;
+    const d = size * (0.5 + rng() * 0.5);
+    const lx = x + Math.cos(a) * d;
+    const ly = y + Math.sin(a) * d;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.6 + rng() * 0.3;
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, size * 0.7, size * 0.4, a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBud(ctx, x, y, rng) {
+  // Flower-like bud with glow
+  ctx.fillStyle = 'rgba(212, 105, 74, 0.3)';
+  ctx.beginPath();
+  ctx.arc(x, y, 8, 0, Math.PI * 2);
+  ctx.fill();
+  
+  const petals = 5;
+  for (let i = 0; i < petals; i++) {
+    const a = (Math.PI * 2 * i) / petals;
+    const px = x + Math.cos(a) * 3;
+    const py = y + Math.sin(a) * 3;
+    ctx.fillStyle = '#e8a298';
+    ctx.beginPath();
+    ctx.ellipse(px, py, 3, 2, a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  ctx.fillStyle = '#c49a3e';
+  ctx.beginPath();
+  ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawKwLabel(ctx, text, x, y, cat, leftSide) {
+  const colors = { roots: '#8b6a4a', interest: '#3a4828', future: '#b85a3c' };
+  ctx.fillStyle = colors[cat] || '#1f1a15';
+  ctx.font = "11px 'Klee One', serif";
+  ctx.textAlign = leftSide ? 'right' : 'left';
+  ctx.textBaseline = 'middle';
+  const padX = leftSide ? -4 : 4;
+  // subtle background for readability
+  const metrics = ctx.measureText(text);
+  const w = metrics.width;
+  ctx.save();
+  ctx.fillStyle = 'rgba(244, 237, 224, 0.75)';
+  const bgX = leftSide ? x + padX - w - 2 : x + padX - 2;
+  ctx.fillRect(bgX, y - 7, w + 4, 14);
+  ctx.restore();
+  ctx.fillStyle = colors[cat];
+  ctx.fillText(text, x + padX, y);
+}
+
+// ============ FOREST DRAWING ============
+function setupForestCanvas() {
+  const canvas = document.getElementById('forest-canvas');
+  const container = canvas.parentElement;
+  const rect = container.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  
+  // Setup drag
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  
+  const onDown = (e) => {
+    dragging = true;
+    const p = getPoint(e);
+    lastX = p.x;
+    lastY = p.y;
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    const p = getPoint(e);
+    state.forest.offsetX += p.x - lastX;
+    state.forest.offsetY += p.y - lastY;
+    lastX = p.x;
+    lastY = p.y;
+    renderForest();
+  };
+  const onUp = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const p = getPoint(e);
+    // Check for tap (small movement)
+    const dx = p.x - lastX;
+    const dy = p.y - lastY;
+    // Click is handled below directly
+  };
+  
+  function getPoint(e) {
+    const r = canvas.getBoundingClientRect();
+    if (e.touches && e.touches[0]) {
+      return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+    }
+    if (e.changedTouches && e.changedTouches[0]) {
+      return { x: e.changedTouches[0].clientX - r.left, y: e.changedTouches[0].clientY - r.top };
+    }
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  
+  canvas.onmousedown = onDown;
+  canvas.onmousemove = onMove;
+  canvas.onmouseup = onUp;
+  canvas.onmouseleave = () => dragging = false;
+  canvas.ontouchstart = (e) => { onDown(e); };
+  canvas.ontouchmove = (e) => { e.preventDefault(); onMove(e); };
+  canvas.ontouchend = onUp;
+  
+  // Click for detail
+  canvas.onclick = (e) => {
+    const p = getPoint(e);
+    const tree = findTreeAt(p.x, p.y);
+    if (tree) showDetail(tree);
+  };
+}
+
+function centerForest() {
+  const canvas = document.getElementById('forest-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width / dpr;
+  const H = canvas.height / dpr;
+  
+  const positions = getForestPositions();
+  if (positions.length === 0) {
+    state.forest.offsetX = 0;
+    state.forest.offsetY = 0;
+    return;
+  }
+  // Center on middle of forest
+  let sumX = 0, sumY = 0;
+  positions.forEach(p => { sumX += p.x; sumY += p.y; });
+  const avgX = sumX / positions.length;
+  const avgY = sumY / positions.length;
+  state.forest.offsetX = W / 2 - avgX;
+  state.forest.offsetY = H / 2 - avgY + 50;
+}
+
+function getForestPositions() {
+  // Arrange trees in a soft grid / scattered layout
+  const trees = state.trees;
+  const positions = [];
+  const perRow = Math.max(3, Math.ceil(Math.sqrt(trees.length)));
+  const spacingX = 240;
+  const spacingY = 280;
+  
+  trees.forEach((tree, i) => {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    const seed = stringHash(tree.id);
+    const rng = seededRandom(seed);
+    // slight random offset for organic feel
+    const offsetX = (rng() - 0.5) * 40;
+    const offsetY = (rng() - 0.5) * 40;
+    const rowOffset = row % 2 === 1 ? spacingX / 2 : 0;
+    positions.push({
+      x: col * spacingX + rowOffset + offsetX,
+      y: row * spacingY + offsetY,
+      tree
+    });
+  });
+  return positions;
+}
+
+function renderForest() {
+  const canvas = document.getElementById('forest-canvas');
+  if (!canvas.width) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.width / dpr;
+  const H = canvas.height / dpr;
+  
+  ctx.clearRect(0, 0, W, H);
+  
+  // Background mist / atmosphere layers
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(196, 154, 62, 0.04)');
+  grad.addColorStop(0.5, 'transparent');
+  grad.addColorStop(1, 'rgba(90, 107, 62, 0.08)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  
+  const positions = getForestPositions();
+  
+  if (positions.length === 0) {
+    ctx.fillStyle = 'rgba(74, 63, 50, 0.5)';
+    ctx.font = "italic 14px 'Klee One', serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('まだ樹が植えられていません', W / 2, H / 2);
+    ctx.fillText('最初の一本を植えてみましょう', W / 2, H / 2 + 24);
+    return;
+  }
+  
+  const ox = state.forest.offsetX;
+  const oy = state.forest.offsetY;
+  
+  // Draw connections first (behind trees)
+  if (state.showConnections) {
+    drawConnections(ctx, positions, ox, oy);
+  }
+  
+  // Draw trees
+  positions.forEach(pos => {
+    drawTree(ctx, pos.tree, pos.x + ox, pos.y + oy, 220);
+  });
+}
+
+function drawConnections(ctx, positions, ox, oy) {
+  // For each pair, find matching keywords and draw lines
+  const connections = findConnections(positions.map(p => p.tree));
+  
+  connections.forEach(c => {
+    const p1 = positions.find(p => p.tree.id === c.tree1.id);
+    const p2 = positions.find(p => p.tree.id === c.tree2.id);
+    if (!p1 || !p2) return;
+    
+    const x1 = p1.x + ox;
+    const y1 = p1.y + oy - 80;
+    const x2 = p2.x + ox;
+    const y2 = p2.y + oy - 80;
+    
+    // Draw arc between them
+    ctx.strokeStyle = `rgba(196, 154, 62, ${0.2 + c.strength * 0.4})`;
+    ctx.lineWidth = 0.5 + c.strength * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    const mx = (x1 + x2) / 2;
+    const my = Math.min(y1, y2) - Math.abs(x2 - x1) * 0.15 - 30;
+    ctx.quadraticCurveTo(mx, my, x2, y2);
+    ctx.stroke();
+    
+    // small dot at midpoint showing the shared keyword
+    if (c.strength > 0.5) {
+      const t = 0.5;
+      const midX = (1-t)*(1-t)*x1 + 2*(1-t)*t*mx + t*t*x2;
+      const midY = (1-t)*(1-t)*y1 + 2*(1-t)*t*my + t*t*y2;
+      ctx.fillStyle = 'rgba(196, 154, 62, 0.6)';
+      ctx.beginPath();
+      ctx.arc(midX, midY, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+}
+
+// Simple keyword similarity: exact match, substring, or shared characters
+function findConnections(trees) {
+  const connections = [];
+  for (let i = 0; i < trees.length; i++) {
+    for (let j = i + 1; j < trees.length; j++) {
+      const t1 = trees[i];
+      const t2 = trees[j];
+      let bestStrength = 0;
+      let sharedKw = null;
+      for (const k1 of t1.keywords) {
+        for (const k2 of t2.keywords) {
+          const sim = keywordSimilarity(k1.text, k2.text);
+          if (sim > bestStrength) {
+            bestStrength = sim;
+            sharedKw = { a: k1.text, b: k2.text, sim };
+          }
+        }
+      }
+      if (bestStrength >= 0.3) {
+        connections.push({ tree1: t1, tree2: t2, strength: bestStrength, shared: sharedKw });
+      }
+    }
+  }
+  return connections;
+}
+
+function keywordSimilarity(a, b) {
+  if (!a || !b) return 0;
+  a = a.toLowerCase().trim();
+  b = b.toLowerCase().trim();
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) {
+    return Math.min(a.length, b.length) / Math.max(a.length, b.length);
+  }
+  // Character overlap (for Japanese)
+  const setA = new Set(a);
+  const setB = new Set(b);
+  let shared = 0;
+  for (const c of setA) if (setB.has(c)) shared++;
+  const total = new Set([...a, ...b]).size;
+  const sim = total > 0 ? shared / total : 0;
+  // Require at least 2 chars shared to avoid noise
+  if (shared < 2) return 0;
+  return sim * 0.8; // cap character-overlap similarity
+}
+
+function findTreeAt(clickX, clickY) {
+  const positions = getForestPositions();
+  const ox = state.forest.offsetX;
+  const oy = state.forest.offsetY;
+  // Check in reverse order (top trees first)
+  for (let i = positions.length - 1; i >= 0; i--) {
+    const p = positions[i];
+    const x = p.x + ox;
+    const y = p.y + oy;
+    // bounding box: ~220 wide, 250 tall, centered at (x, y - 80)
+    if (clickX >= x - 110 && clickX <= x + 110 &&
+        clickY >= y - 200 && clickY <= y + 40) {
+      return p.tree;
+    }
+  }
+  return null;
+}
+
+// ============ DETAIL ============
+function showDetail(tree) {
+  document.getElementById('detail-name').textContent = tree.name;
+  const d = new Date(tree.createdAt);
+  document.getElementById('detail-meta').textContent = 
+    `${tree.keywords.length}個のキーワード · ${d.getMonth()+1}月${d.getDate()}日 植樹`;
+  
+  const sections = document.getElementById('detail-sections');
+  const cats = [
+    { key: 'roots', label: 'ルーツ・過去' },
+    { key: 'interest', label: 'いま・興味' },
+    { key: 'future', label: 'これから' }
+  ];
+  sections.innerHTML = cats.map(c => {
+    const kws = tree.keywords.filter(k => k.cat === c.key);
+    if (kws.length === 0) return '';
+    return `
+      <div class="detail-section" data-cat="${c.key}">
+        <div class="detail-section-title">${c.label}</div>
+        <div class="detail-keywords">
+          ${kws.map(k => `<span class="detail-kw">${escapeHtml(k.text)}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // Connections
+  const connWrap = document.getElementById('detail-connections-wrap');
+  const connList = document.getElementById('detail-connections');
+  const related = findConnectionsFor(tree);
+  if (related.length > 0) {
+    connWrap.style.display = 'block';
+    connList.innerHTML = related.slice(0, 6).map(r => {
+      const desc = r.shared.a === r.shared.b
+        ? `<em>${escapeHtml(r.shared.a)}</em>`
+        : `<em>${escapeHtml(r.shared.a)}</em> と <em>${escapeHtml(r.shared.b)}</em>`;
+      return `<div class="detail-connection-item">${escapeHtml(r.other.name)} さんとは ${desc} でつながっています</div>`;
+    }).join('');
+  } else {
+    connWrap.style.display = 'none';
+  }
+  
+  document.getElementById('detail-overlay').classList.add('active');
+}
+
+function findConnectionsFor(tree) {
+  const result = [];
+  state.trees.forEach(other => {
+    if (other.id === tree.id) return;
+    let bestStrength = 0;
+    let shared = null;
+    for (const k1 of tree.keywords) {
+      for (const k2 of other.keywords) {
+        const sim = keywordSimilarity(k1.text, k2.text);
+        if (sim > bestStrength) {
+          bestStrength = sim;
+          shared = { a: k1.text, b: k2.text, sim };
+        }
+      }
+    }
+    if (bestStrength >= 0.3) {
+      result.push({ other, strength: bestStrength, shared });
+    }
+  });
+  return result.sort((a, b) => b.strength - a.strength);
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('active');
+}
+
+function toggleConnections() {
+  state.showConnections = !state.showConnections;
+  const btn = document.getElementById('toggle-connections');
+  btn.classList.toggle('on', state.showConnections);
+  renderForest();
+}
+
+// ============ UTIL ============
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ============ INIT ============
+document.getElementById('name-input').addEventListener('input', () => {
+  updatePlantButton();
+  renderMyTree();
+});
+
+document.getElementById('keyword-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addKeyword();
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (state.currentScreen === 'build') setupTreeCanvas();
+  if (state.currentScreen === 'forest') {
+    setupForestCanvas();
+    renderForest();
+  }
+});
+
+// Load initial trees count for display
+(async () => {
+  state.trees = await loadAllTrees();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+.dburl
+.jwt-secret
+.env
+.env.local
+.DS_Store
+reference/wordmap/node_modules/
+reference/wordmap/coverage/
+reference/wordmap/dist/

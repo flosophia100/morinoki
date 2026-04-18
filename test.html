@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>test</title>
+<style>body{font-family:monospace;padding:1em;background:#f4ede0;color:#1f1a15}.p{color:#2a6b1e}.f{color:#c23a20}hr{margin:1em 0}</style>
+</head><body>
+<h1>morinoki unit tests</h1><div id="out"></div>
+<script type="module">
+import { stringHash, seededRandom, isValidSlug, randomSlug, escapeHtml } from './js/utils.js';
+import { saveSession, loadSession, clearSession, isTokenExpired } from './js/auth.js';
+
+const out = document.getElementById('out');
+let fails = 0;
+function t(name, fn) {
+  try { fn(); out.insertAdjacentHTML('beforeend', `<div class="p">✓ ${name}</div>`); }
+  catch(e) { fails++; out.insertAdjacentHTML('beforeend', `<div class="f">✗ ${name}: ${e.message}</div>`); }
+}
+function eq(a,b,m){ if(a!==b) throw new Error((m||'')+' expected '+b+' got '+a); }
+function ok(v,m){ if(!v) throw new Error(m||'expected truthy'); }
+
+// utils.js
+t('stringHash deterministic', () => eq(stringHash('abc'), stringHash('abc')));
+t('stringHash differs', () => ok(stringHash('abc') !== stringHash('abd')));
+t('stringHash positive', () => { ok(stringHash('')>=1); ok(stringHash('x')>=1); });
+t('seededRandom deterministic', () => { const a=seededRandom(42),b=seededRandom(42); eq(a(),b()); eq(a(),b()); });
+t('seededRandom 0..1', () => { const r=seededRandom(7); for(let i=0;i<10;i++){ const v=r(); ok(v>=0&&v<1); } });
+t('isValidSlug accepts', () => { ok(isValidSlug('abc-def')); ok(isValidSlug('3a-forest')); ok(isValidSlug('abc')); });
+t('isValidSlug rejects', () => { ok(!isValidSlug('AB')); ok(!isValidSlug('ab')); ok(!isValidSlug('ab_cd')); ok(!isValidSlug('')); });
+t('randomSlug valid', () => { for(let i=0;i<20;i++) ok(isValidSlug(randomSlug())); });
+t('escapeHtml', () => { eq(escapeHtml('<b>"&'), '&lt;b&gt;"&amp;'); });
+
+// auth.js
+t('saveSession/loadSession', () => {
+  saveSession('_test_room_', { treeId: 'tid1', editToken: 'aaa.bbb.ccc', treeName: 'テスト' });
+  const s = loadSession('_test_room_');
+  ok(s); eq(s.treeId, 'tid1'); eq(s.treeName, 'テスト');
+  clearSession('_test_room_');
+  eq(loadSession('_test_room_'), null);
+});
+t('loadSession invalid returns null', () => {
+  localStorage.setItem('mori.session._bad_', 'not json');
+  eq(loadSession('_bad_'), null);
+  localStorage.removeItem('mori.session._bad_');
+});
+t('isTokenExpired for missing/invalid', () => {
+  ok(isTokenExpired(''));
+  ok(isTokenExpired('garbage'));
+});
+t('isTokenExpired past/future', () => {
+  const mk = (exp) => {
+    const header = btoa('{"alg":"HS256"}').replace(/=+$/,'');
+    const payload = btoa(JSON.stringify({ exp })).replace(/=+$/,'');
+    return `${header}.${payload}.sig`;
+  };
+  ok(isTokenExpired(mk(1)));                 // 1970年 → 期限切れ
+  ok(!isTokenExpired(mk(Math.floor(Date.now()/1000) + 3600))); // 1時間後 → 有効
+});
+
+out.insertAdjacentHTML('beforeend', `<hr><div class="${fails===0?'p':'f'}">${fails===0?'ALL PASS':'FAILURES: '+fails}</div>`);
+</script>
+</body></html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>モジュールローダーテスト</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffe6e6; border-left: 4px solid #ff0000; }
+        .success { background: #e6ffe6; border-left: 4px solid #00aa00; }
+        .warning { background: #fff3cd; border-left: 4px solid #ffa500; }
+    </style>
+</head>
+<body>
+    <h1>モジュールローダーテスト</h1>
+    <div id="status">初期化中...</div>
+    <div id="logs"></div>
+    
+    <script>
+        // ログ出力用関数
+        function addLog(message, type = 'log') {
+            const logs = document.getElementById('logs');
+            const log = document.createElement('div');
+            log.className = `log ${type}`;
+            log.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            logs.appendChild(log);
+            console.log(message);
+        }
+        
+        // エラーハンドリング
+        window.addEventListener('error', (e) => {
+            addLog(`エラー: ${e.message} (${e.filename}:${e.lineno})`, 'error');
+        });
+        
+        window.addEventListener('unhandledrejection', (e) => {
+            addLog(`Promise拒否: ${e.reason}`, 'error');
+        });
+        
+        // モジュールローダーテスト
+        addLog('モジュールローダーをテスト中...');
+    </script>
+    
+    <!-- モジュールローダー読み込み -->
+    <script src="module-loader.js"></script>
+    
+    <script>
+        // モジュールローダーの確認
+        window.addEventListener('DOMContentLoaded', async () => {
+            addLog('DOMContentLoaded イベント発生');
+            
+            if (window.ModuleLoader) {
+                addLog('ModuleLoader が利用可能', 'success');
+                
+                try {
+                    const results = await window.ModuleLoader.loadCoreModules();
+                    addLog(`コアモジュール読み込み結果: ${results.length}個のモジュール`, 'success');
+                    
+                    results.forEach(result => {
+                        const type = result.success ? 'success' : 'warning';
+                        addLog(`${result.module}: ${result.success ? '成功' : '失敗'}`, type);
+                    });
+                    
+                    // 利用可能なグローバル変数をチェック
+                    const globals = ['CONFIG', 'WordMapUtils', 'D3WordMapEditor'];
+                    globals.forEach(globalName => {
+                        if (window[globalName]) {
+                            addLog(`グローバル変数 ${globalName} が利用可能`, 'success');
+                        } else {
+                            addLog(`グローバル変数 ${globalName} が見つかりません`, 'warning');
+                        }
+                    });
+                    
+                    document.getElementById('status').textContent = 'テスト完了';
+                    
+                } catch (error) {
+                    addLog(`モジュール読み込みエラー: ${error.message}`, 'error');
+                    document.getElementById('status').textContent = 'エラー発生';
+                }
+            } else {
+                addLog('ModuleLoader が利用できません', 'error');
+                document.getElementById('status').textContent = 'ModuleLoader エラー';
+            }
+        });
+    </script>
+</body>
+</html>
