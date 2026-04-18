@@ -7,3 +7,5 @@ node_modules/
 reference/wordmap/node_modules/
 reference/wordmap/coverage/
 reference/wordmap/dist/
+
+.vercel
