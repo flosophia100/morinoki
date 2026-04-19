@@ -1,102 +1,92 @@
 import { seededRandom, stringHash } from './utils.js';
 
-// ====== 放射状バースト(ノード・幹共通) ======
-// 上から見た樹:中央は密に詰まり、外周はギザギザに伸びる。
-// 3層構造: (a) 中心の詰まった短線層  (b) 中長線層  (c) 外へ突出する長線(ギザギザ感)
-export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts = {}) {
-  const { density = 1.0, jitter = 0.7, dots = true } = opts;
-  ctx.save();
+// 1本の放射曲線を先太・先細で描く(3セグメント分割)
+// (cx,cy) から length, angle a, 曲げ bend で先端 (x2,y2) まで
+// wBase→wTip に徐々に細くなる
+function strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip) {
+  const x2 = cx + Math.cos(a) * len;
+  const y2 = cy + Math.sin(a) * len;
+  // 制御点は垂直方向の bend
+  const nx = -Math.sin(a), ny = Math.cos(a);
+  const mx = cx + Math.cos(a) * len * 0.5 + nx * bend;
+  const my = cy + Math.sin(a) * len * 0.5 + ny * bend;
+  // 3 サンプル点 (t = 0, 0.33, 0.67, 1)
+  const SEG = 3;
+  const pts = [];
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;
+    const mt = 1 - t;
+    pts.push([
+      mt * mt * cx + 2 * mt * t * mx + t * t * x2,
+      mt * mt * cy + 2 * mt * t * my + t * t * y2
+    ]);
+  }
+  ctx.strokeStyle = col;
+  ctx.globalAlpha = alpha;
   ctx.lineCap = 'round';
+  // 各セグメントを中点の線幅で描画 → 先細り
+  for (let i = 0; i < SEG; i++) {
+    const tMid = (i + 0.5) / SEG;
+    const w = wBase + (wTip - wBase) * tMid;
+    ctx.lineWidth = Math.max(0.4, w);
+    ctx.beginPath();
+    ctx.moveTo(pts[i][0], pts[i][1]);
+    ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
+    ctx.stroke();
+  }
+}
+
+// ====== 放射状バースト(ノード・幹共通) ======
+// 中心から周囲へ曲線で放射。先細りで尖る(先端ドットなし)。
+// 2層: (a) 密な近接曲線 + (b) 外周ギザギザ長曲線
+export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts = {}) {
+  const { density = 1.0, jitter = 0.8 } = opts;
+  ctx.save();
   const strokeDark = strokeCol || col;
 
-  // --- 影(ベース形状の薄い影) ---
+  // 影(ベース形状の薄い影)
   ctx.save();
-  ctx.fillStyle = 'rgba(40, 30, 15, 0.16)';
+  ctx.fillStyle = 'rgba(40, 30, 15, 0.14)';
   ctx.beginPath();
   ctx.arc(cx + 2, cy + 3, baseR * 0.95, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // --- 層 (a) 詰まった中心:塗り+粒点で「満杯」感(単一パスで高速) ---
-  // 中央は塗りディスクで詰まり表現、ノイズ粒で質感
-  ctx.save();
-  ctx.fillStyle = col;
-  ctx.globalAlpha = 0.82;
-  ctx.beginPath();
-  ctx.arc(cx, cy, baseR * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  // 粒点:中心〜0.55r
-  const rngInner = seededRandom(Math.max(1, Math.floor(seed)));
-  const Nin = Math.floor((40 + baseR * 0.5) * density);
-  ctx.fillStyle = strokeDark;
-  for (let i = 0; i < Nin; i++) {
-    const a = rngInner() * Math.PI * 2;
-    const r = rngInner() * baseR * 0.55;
-    ctx.globalAlpha = 0.35 + rngInner() * 0.45;
-    ctx.beginPath();
-    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0.6 + rngInner() * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // --- 層 (b) 中距離:密な短線(seed順で等角分散) ---
+  // --- (a) 密な近接曲線(約0.35〜0.75r) ---
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
-  const Nmid = Math.floor((28 + baseR * 0.5) * density);
+  const Nmid = Math.floor((40 + baseR * 0.7) * density);
   for (let i = 0; i < Nmid; i++) {
-    const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.35;
-    const len = baseR * (0.55 + rngMid() * 0.3);
-    const x1 = cx + Math.cos(a) * baseR * 0.3;
-    const y1 = cy + Math.sin(a) * baseR * 0.3;
-    const x2 = cx + Math.cos(a) * len;
-    const y2 = cy + Math.sin(a) * len;
-    ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.6 + rngMid() * 0.3;
-    ctx.lineWidth = 0.9 + rngMid() * 1.0;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
+    const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.3;
+    const len = baseR * (0.45 + rngMid() * 0.3);
+    const bend = (rngMid() * 2 - 1) * len * 0.18 * jitter;
+    const alpha = 0.5 + rngMid() * 0.4;
+    const wBase = 2.2 + rngMid() * 1.2;
+    const wTip = 0.5 + rngMid() * 0.4;
+    strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip);
   }
 
-  // --- 層 (c) 外へ突出する長線(ギザギザ感):少数、長さバラツキ大 ---
+  // --- (b) 外周に突き出すギザギザ長曲線 ---
   const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
-  const Nout = Math.floor((22 + baseR * 0.35) * density);
+  const Nout = Math.floor((26 + baseR * 0.45) * density);
   for (let i = 0; i < Nout; i++) {
     const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
-    // 長さが大きくばらつく:短いものと長く突き出すものが混在してギザギザ感
-    const spike = rngOut() < 0.35;
-    const len = baseR * (spike ? (1.0 + rngOut() * 0.45) : (0.75 + rngOut() * 0.2));
-    const midA = a + (rngOut() - 0.5) * 0.25 * jitter;
-    const midR = len * (0.6 + rngOut() * 0.15);
-    const x1 = cx + Math.cos(a) * baseR * 0.12;
-    const y1 = cy + Math.sin(a) * baseR * 0.12;
-    const x2 = cx + Math.cos(a) * len;
-    const y2 = cy + Math.sin(a) * len;
-    const mx = cx + Math.cos(midA) * midR;
-    const my = cy + Math.sin(midA) * midR;
-    ctx.strokeStyle = spike ? strokeDark : col;
-    ctx.globalAlpha = spike ? (0.75 + rngOut() * 0.25) : (0.6 + rngOut() * 0.3);
-    ctx.lineWidth = spike ? (1.1 + rngOut() * 1.3) : (0.8 + rngOut() * 1.0);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.quadraticCurveTo(mx, my, x2, y2);
-    ctx.stroke();
-    // 先端に葉の点
-    if (dots && rngOut() < 0.6) {
-      ctx.globalAlpha = 0.75 + rngOut() * 0.25;
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(x2, y2, 0.9 + rngOut() * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const spike = rngOut() < 0.38;
+    const len = baseR * (spike ? (0.95 + rngOut() * 0.5) : (0.7 + rngOut() * 0.25));
+    const bend = (rngOut() * 2 - 1) * len * 0.22 * jitter;
+    const alpha = spike ? (0.75 + rngOut() * 0.2) : (0.55 + rngOut() * 0.35);
+    const wBase = spike ? (2.6 + rngOut() * 1.4) : (1.8 + rngOut() * 1.0);
+    const wTip = 0.45 + rngOut() * 0.35;
+    strokeTaperedRadial(ctx, cx, cy, a, len, bend, spike ? strokeDark : col, alpha, wBase, wTip);
   }
   ctx.globalAlpha = 1;
 
-  // 中心のアンカー(小)
+  // 中心のアンカー(濃い小円):根元の密集感
   ctx.fillStyle = strokeDark;
+  ctx.globalAlpha = 0.85;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(1.6, baseR * 0.08), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(2, baseR * 0.15), 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
 
   ctx.restore();
 }
