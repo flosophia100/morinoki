@@ -1,39 +1,35 @@
 import { seededRandom, stringHash } from './utils.js';
 
-// 1本の放射曲線を先太・先細で描く(3セグメント分割)
-// (cx,cy) から length, angle a, 曲げ bend で先端 (x2,y2) まで
-// wBase→wTip に徐々に細くなる
+// 1本の放射曲線を先太・先細で描く(2ストロークで軽量)
+// 1. 全長を細めで引く(先端)  2. 基部40%だけ太く上書き
 function strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip) {
   const x2 = cx + Math.cos(a) * len;
   const y2 = cy + Math.sin(a) * len;
-  // 制御点は垂直方向の bend
   const nx = -Math.sin(a), ny = Math.cos(a);
   const mx = cx + Math.cos(a) * len * 0.5 + nx * bend;
   const my = cy + Math.sin(a) * len * 0.5 + ny * bend;
-  // 3 サンプル点 (t = 0, 0.33, 0.67, 1)
-  const SEG = 3;
-  const pts = [];
-  for (let i = 0; i <= SEG; i++) {
-    const t = i / SEG;
-    const mt = 1 - t;
-    pts.push([
-      mt * mt * cx + 2 * mt * t * mx + t * t * x2,
-      mt * mt * cy + 2 * mt * t * my + t * t * y2
-    ]);
-  }
+
   ctx.strokeStyle = col;
   ctx.globalAlpha = alpha;
   ctx.lineCap = 'round';
-  // 各セグメントを中点の線幅で描画 → 先細り
-  for (let i = 0; i < SEG; i++) {
-    const tMid = (i + 0.5) / SEG;
-    const w = wBase + (wTip - wBase) * tMid;
-    ctx.lineWidth = Math.max(0.4, w);
-    ctx.beginPath();
-    ctx.moveTo(pts[i][0], pts[i][1]);
-    ctx.lineTo(pts[i + 1][0], pts[i + 1][1]);
-    ctx.stroke();
-  }
+
+  // 1) 全長を細めで(先端)
+  ctx.lineWidth = Math.max(0.4, wTip);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.quadraticCurveTo(mx, my, x2, y2);
+  ctx.stroke();
+
+  // 2) 基部40%を太く上書き
+  const t = 0.4;
+  const tMt = 1 - t;
+  const px = tMt * tMt * cx + 2 * tMt * t * mx + t * t * x2;
+  const py = tMt * tMt * cy + 2 * tMt * t * my + t * t * y2;
+  ctx.lineWidth = Math.max(0.6, wBase);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.quadraticCurveTo(cx + (mx - cx) * t, cy + (my - cy) * t, px, py);
+  ctx.stroke();
 }
 
 // ====== 放射状バースト(ノード・幹共通) ======
@@ -54,7 +50,7 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
 
   // --- (a) 密な近接曲線(約0.35〜0.75r) ---
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
-  const Nmid = Math.floor((40 + baseR * 0.7) * density);
+  const Nmid = Math.floor((22 + baseR * 0.45) * density);
   for (let i = 0; i < Nmid; i++) {
     const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.3;
     const len = baseR * (0.45 + rngMid() * 0.3);
@@ -67,7 +63,7 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
 
   // --- (b) 外周に突き出すギザギザ長曲線 ---
   const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
-  const Nout = Math.floor((26 + baseR * 0.45) * density);
+  const Nout = Math.floor((14 + baseR * 0.28) * density);
   for (let i = 0; i < Nout; i++) {
     const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
     const spike = rngOut() < 0.38;
