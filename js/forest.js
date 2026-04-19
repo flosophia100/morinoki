@@ -32,11 +32,21 @@ export function createForest(canvas, state) {
   window.addEventListener('resize', () => { resize(); render(); });
 
   let drag = null;
+  let pinch = null; // { d0, scale0, ox0, oy0, cx, cy }
 
   function pt(e) {
     const r = canvas.getBoundingClientRect();
     const src = e.touches?.[0] || e.changedTouches?.[0] || e;
     return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+  function twoTouchCenter(e) {
+    const r = canvas.getBoundingClientRect();
+    const a = e.touches[0], b = e.touches[1];
+    return {
+      cx: (a.clientX + b.clientX) / 2 - r.left,
+      cy: (a.clientY + b.clientY) / 2 - r.top,
+      d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+    };
   }
   function screenToWorld(x, y) {
     return { x: (x - state.view.ox) / state.view.scale, y: (y - state.view.oy) / state.view.scale };
@@ -165,9 +175,36 @@ export function createForest(canvas, state) {
   canvas.addEventListener('mousedown', onDown);
   canvas.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onUp);
-  canvas.addEventListener('touchstart', onDown, { passive: false });
-  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); onMove(e); }, { passive: false });
-  canvas.addEventListener('touchend', onUp);
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const { cx, cy, d } = twoTouchCenter(e);
+      pinch = { d0: d, scale0: state.view.scale, ox0: state.view.ox, oy0: state.view.oy, cx, cy };
+      drag = null;
+      e.preventDefault();
+      return;
+    }
+    onDown(e);
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 2 && pinch) {
+      const { cx, cy, d } = twoTouchCenter(e);
+      const factor = d / pinch.d0;
+      const s = Math.max(0.25, Math.min(3.5, pinch.scale0 * factor));
+      // pinch center を中心にズーム
+      const ratio = s / pinch.scale0;
+      state.view.ox = cx - (cx - pinch.ox0) * ratio;
+      state.view.oy = cy - (cy - pinch.oy0) * ratio;
+      state.view.scale = s;
+      render();
+      return;
+    }
+    onMove(e);
+  }, { passive: false });
+  canvas.addEventListener('touchend', (e) => {
+    if (pinch && e.touches.length < 2) { pinch = null; return; }
+    onUp(e);
+  });
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   function render() {

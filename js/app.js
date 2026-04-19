@@ -61,14 +61,19 @@ function initIndex() {
 
 async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
-  const { openPlantModal, renderInfoPanel, openShareModal, openRestoreModal } = await import('./editor.js');
+  const { openPlantModal, renderInfoPanel, openShareModal, openRestoreModal, exportForestCsv } = await import('./editor.js');
   const { loadSession, isTokenExpired, clearSession } = await import('./auth.js');
   const { subscribeRoom, debounce } = await import('./realtime.js');
   const { LiveForest } = await import('./liveforest.js');
   const { atmosphereAt } = await import('./atmosphere.js');
+  const { showToast, showError, setConnectionStatus } = await import('./toast.js');
 
   const slug = location.pathname.match(/\/r\/([^\/]+)/)?.[1] || new URLSearchParams(location.search).get('slug');
-  if (!slug) { alert('ルームが指定されていません'); return; }
+  if (!slug) {
+    const t = await import('./toast.js');
+    t.showError('ルームが指定されていません');
+    return;
+  }
 
   const state = {
     room: null, trees: [], session: null, selfTreeId: null,
@@ -80,7 +85,11 @@ async function initRoom() {
   };
 
   try { state.room = await api.getRoomBySlug(slug); }
-  catch { alert('森が見つかりません: ' + slug); return; }
+  catch {
+    const t = await import('./toast.js');
+    t.showError('森が見つかりません: ' + slug);
+    return;
+  }
 
   document.getElementById('forest-name').textContent = state.room.name || state.room.slug;
 
@@ -119,6 +128,10 @@ async function initRoom() {
       updatePanel(); updatePlantBtn(); forest.render();
     },
     onRerender: () => { updatePanel(); forest.render(); },
+    onExportCsv: () => {
+      try { exportForestCsv(state); showToast('CSVをダウンロードしました', 'success'); }
+      catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
+    },
     onSelectNode: (tree, node) => {
       state.selection = { kind: 'node', tree, node };
       updatePanel(); forest.render();
@@ -192,7 +205,28 @@ async function initRoom() {
       forest.render();
     } catch (e) { console.error('realtime reload', e); }
   }, 500);
-  const unsubscribeRealtime = subscribeRoom(state.room.id, treeIdsRef, onRealtime);
+  let realtimeOk = false;
+  const unsubscribeRealtime = subscribeRoom(state.room.id, treeIdsRef, onRealtime, (status) => {
+    if (status === 'SUBSCRIBED') {
+      realtimeOk = true;
+      setConnectionStatus(navigator.onLine ? 'online' : 'offline');
+    } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      realtimeOk = false;
+      if (navigator.onLine) setConnectionStatus('reconnecting');
+    }
+  });
+
+  // online/offline監視
+  function updateOnline() {
+    if (!navigator.onLine) {
+      setConnectionStatus('offline');
+    } else {
+      setConnectionStatus(realtimeOk ? 'online' : 'reconnecting');
+    }
+  }
+  window.addEventListener('online', updateOnline);
+  window.addEventListener('offline', updateOnline);
+  updateOnline();
 
   window.addEventListener('beforeunload', () => {
     live.stop();
@@ -210,7 +244,7 @@ async function initRoom() {
     if (!state.session) return;
     try {
       await api.updateTreePosition(state.session.editToken, tree.id, tree.x, tree.y);
-    } catch (e) { console.error('updateTreePosition:', e); }
+    } catch (e) { showError(e, '樹の移動を保存できませんでした'); }
   };
   state.onNodeMoved = async (tree, node) => {
     forest.render();
@@ -222,7 +256,7 @@ async function initRoom() {
       });
       Object.assign(node, saved);
       forest.render();
-    } catch (e) { console.error('upsertNode(offset):', e); }
+    } catch (e) { showError(e, 'ノードの移動を保存できませんでした'); }
   };
 
   // ==== 植樹ボタン ====

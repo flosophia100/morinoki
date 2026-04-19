@@ -27,7 +27,8 @@ await pageA.fill('#forest-name', 'Phase3森');
 await pageA.fill('#forest-slug', slug);
 await pageA.click('button[type=submit]');
 await pageA.waitForSelector('#created:not(.hidden)', { timeout: 20000 });
-const forestUrl = await pageA.$eval('#created-url', el => el.textContent);
+const forestUrlFromUI = await pageA.$eval('#created-url', el => el.textContent);
+const forestUrl = BASE.includes('vercel.app') ? forestUrlFromUI : `${BASE}/room.html?slug=${slug}`;
 
 // 2. Aが植樹
 await pageA.goto(forestUrl, { waitUntil: 'networkidle' });
@@ -47,7 +48,16 @@ await pageA.waitForFunction(() => document.querySelector('.self-badge') !== null
 for (const kw of ['音楽', '読書']) {
   await pageA.fill('#ip-add-input', kw);
   await pageA.click('#ip-add-btn');
-  await pageA.waitForFunction(t => [...document.querySelectorAll('.ip-kw .kw')].some(el => el.textContent.includes(t)), kw, { timeout: 8000 });
+  try {
+    await pageA.waitForFunction(t => [...document.querySelectorAll('.ip-kw .kw')].some(el => el.textContent.includes(t)), kw, { timeout: 8000 });
+  } catch (e) {
+    const state = await pageA.evaluate(() => ({
+      panel: document.getElementById('info-content')?.innerHTML?.slice(0, 400),
+      kwItems: [...document.querySelectorAll('.ip-kw .kw')].map(el => el.textContent)
+    }));
+    console.log('DEBUG add "' + kw + '": kwItems=', state.kwItems, ' panel=', state.panel);
+    throw e;
+  }
 }
 
 // 3. 時間帯演出: canvasの背景色が時刻で変化している(画像取得+色抽出)

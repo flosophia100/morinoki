@@ -42,10 +42,14 @@ export class LiveForest {
     if (this.running) return;
     this.running = true;
     this.rebuildSimilarityPairs();
+    // 非表示タブでは requestAnimationFrame がstallするので自動的に省エネ
+    // また、タブが非可視の間は明示的にスキップしてCPU節約
     const loop = () => {
       if (!this.running) return;
-      this.tick();
-      this.onTick && this.onTick();
+      if (document.visibilityState === 'visible') {
+        this.tick();
+        this.onTick && this.onTick();
+      }
       this.rafId = requestAnimationFrame(loop);
     };
     this.rafId = requestAnimationFrame(loop);

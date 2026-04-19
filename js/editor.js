@@ -2,6 +2,34 @@ import { api } from './supabase.js';
 import { saveSession, loadSession } from './auth.js';
 import { escapeHtml } from './utils.js';
 
+// ===== CSVエクスポート(主催者向け) =====
+export function exportForestCsv(state) {
+  const rows = [['tree_name', 'created_at', 'keyword', 'size', 'color', 'description', 'parent_keyword']];
+  (state.trees || []).forEach(t => {
+    const nodes = t.nodes || [];
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    if (nodes.length === 0) {
+      rows.push([t.name, t.created_at || '', '', '', '', '', '']);
+      return;
+    }
+    nodes.forEach(n => {
+      const parentName = n.parent_id ? byId.get(n.parent_id)?.text || '' : '';
+      rows.push([t.name, t.created_at || '', n.text, n.size || '', n.color || '', n.description || '', parentName]);
+    });
+  });
+  const csv = rows.map(r => r.map(cell => {
+    const s = String(cell ?? '');
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `forest-${state.room?.slug || 'export'}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 // ===== 共有モーダル =====
 export function openShareModal(forestUrl) {
   const m = document.getElementById('share-modal');
@@ -147,12 +175,19 @@ function idleHTML(state) {
         : `<button data-action="plant" class="btn-primary w-full">+ 樹を植える</button>`
       }
     </div>
+    ${(state.trees || []).length > 0 ? `
+      <div class="ip-block">
+        <label class="mini-label">主催者向け</label>
+        <button data-action="export-csv" class="btn-secondary w-full">森をCSVで書き出す</button>
+      </div>
+    ` : ''}
   `;
 }
 function wireIdle(el, state, cb) {
   el.querySelector('[data-action="plant"]')?.addEventListener('click', () => cb.onPlant && cb.onPlant());
   el.querySelector('[data-action="my-tree"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
+  el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
 }
 
 // ----- 自分の樹(幹タップ) -----
@@ -212,7 +247,7 @@ function wireOwnTree(el, state, tree, cb) {
       tree.nodes.push(saved);
       input.value = '';
       cb.onRerender && cb.onRerender();
-    } catch (e) { alert('保存失敗: ' + e.message); }
+    } catch (e) { import('./toast.js').then(m => m.showError(e, '保存失敗')); }
   }
   btn?.addEventListener('click', addOne);
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
@@ -415,7 +450,7 @@ function wireOwnNode(el, state, tree, node, cb) {
       });
       Object.assign(node, saved);
       cb.onRerender && cb.onRerender();
-    } catch (e) { alert('保存失敗: ' + e.message); }
+    } catch (e) { import('./toast.js').then(m => m.showError(e, '保存失敗')); }
   });
 
   el.querySelector('#nf-delete').addEventListener('click', async () => {
@@ -427,7 +462,7 @@ function wireOwnNode(el, state, tree, node, cb) {
       (tree.nodes || []).forEach(n => { if (victims.has(n.parent_id)) victims.add(n.id); });
       tree.nodes = tree.nodes.filter(n => !victims.has(n.id));
       cb.onSelectTree && cb.onSelectTree(tree); // 親に戻る
-    } catch (e) { alert('削除失敗: ' + e.message); }
+    } catch (e) { import('./toast.js').then(m => m.showError(e, '削除失敗')); }
   });
 
   // 子ノード(孫)追加
@@ -443,7 +478,7 @@ function wireOwnNode(el, state, tree, node, cb) {
       tree.nodes.push(saved);
       input.value = '';
       cb.onRerender && cb.onRerender();
-    } catch (e) { alert('保存失敗: ' + e.message); }
+    } catch (e) { import('./toast.js').then(m => m.showError(e, '保存失敗')); }
   }
   el.querySelector('#nf-sub-btn')?.addEventListener('click', addSub);
   el.querySelector('#nf-sub-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSub(); });
