@@ -177,6 +177,10 @@ function idleHTML(state) {
     </div>
     ${(state.trees || []).length > 0 ? `
       <div class="ip-block">
+        <label class="mini-label">森の物語</label>
+        <button data-action="timelapse" class="btn-secondary w-full">タイムラプスで振り返る</button>
+      </div>
+      <div class="ip-block">
         <label class="mini-label">主催者向け</label>
         <button data-action="export-csv" class="btn-secondary w-full">森をCSVで書き出す</button>
       </div>
@@ -188,6 +192,7 @@ function wireIdle(el, state, cb) {
   el.querySelector('[data-action="my-tree"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
+  el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
 }
 
 // ----- 自分の樹(幹タップ) -----
@@ -306,6 +311,7 @@ function otherTreeHTML(tree, state) {
         <ul class="ip-near-list">
           ${near.map(n => `<li data-tree-id="${n.tree.id}"><span class="dot-sm" style="background:${n.tree.id === state?.selfTreeId ? '#c49a3e' : '#6b4a2b'}"></span>${escapeHtml(n.tree.name)}${n.tree.id === state?.selfTreeId ? ' (あなた)' : ''}<span class="sim-hint">類似 ${Math.round(n.sim * 100)}%</span></li>`).join('')}
         </ul>
+        <button data-action="walk" class="btn-secondary w-full" style="margin-top:0.5rem">散歩 — 近くの樹へ進む</button>
       </div>
     ` : ''}
   `;
@@ -384,6 +390,15 @@ function wireOtherTree(el, state, tree, cb) {
       const t = (state.trees || []).find(x => x.id === tid);
       if (t && cb.onSelectTree) cb.onSelectTree(t);
     });
+  });
+  // 散歩: 一番類似度が高い他人の樹へ自動遷移
+  el.querySelector('[data-action="walk"]')?.addEventListener('click', () => {
+    const near = findNearbyTrees(tree, state.trees || [], 5)
+      .filter(n => n.tree.id !== tree.id && n.tree.id !== state.selfTreeId);
+    // 類似度ベースで最も高いもの(距離ではなく)
+    near.sort((a, b) => b.sim - a.sim);
+    const next = near[0]?.tree;
+    if (next && cb.onSelectTree) cb.onSelectTree(next);
   });
 }
 

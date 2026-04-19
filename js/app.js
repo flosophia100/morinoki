@@ -132,6 +132,7 @@ async function initRoom() {
       try { exportForestCsv(state); showToast('CSVをダウンロードしました', 'success'); }
       catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
     },
+    onTimelapse: () => startTimelapse(),
     onSelectNode: (tree, node) => {
       state.selection = { kind: 'node', tree, node };
       updatePanel(); forest.render();
@@ -303,6 +304,65 @@ async function initRoom() {
 
   // 時間帯を1分ごとに更新(1時間/24段階でゆっくり推移)
   setInterval(() => { state.atmo = atmosphereAt(); forest.render(); }, 60000);
+
+  // ===== タイムラプス =====
+  const tlBar = document.getElementById('timelapse-bar');
+  const tlPlay = document.getElementById('tl-play');
+  const tlSlider = document.getElementById('tl-slider');
+  const tlLabel = document.getElementById('tl-label');
+  const tlClose = document.getElementById('tl-close');
+  let tlInterval = null;
+  let tlRange = null;
+
+  function startTimelapse() {
+    if (!state.trees.length) { showToast('樹がまだありません'); return; }
+    const ts = state.trees.map(t => Date.parse(t.created_at || Date.now())).filter(Number.isFinite);
+    (state.trees || []).forEach(t => (t.nodes || []).forEach(n => {
+      const nt = Date.parse(n.created_at || 0);
+      if (Number.isFinite(nt)) ts.push(nt);
+    }));
+    const minT = Math.min(...ts), maxT = Math.max(...ts);
+    if (minT >= maxT) { showToast('時間の幅が足りません'); return; }
+    tlRange = { min: minT, max: maxT };
+    tlBar.classList.remove('hidden');
+    tlSlider.value = 0;
+    state.timeCursor = minT;
+    updateTlLabel();
+    forest.render();
+    tlPlay.textContent = '▶';
+  }
+  function stopTimelapse() {
+    if (tlInterval) { clearInterval(tlInterval); tlInterval = null; }
+    state.timeCursor = null;
+    tlBar.classList.add('hidden');
+    forest.render();
+  }
+  function updateTlLabel() {
+    if (!state.timeCursor) return;
+    const d = new Date(state.timeCursor);
+    tlLabel.textContent = `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  tlClose?.addEventListener('click', stopTimelapse);
+  tlSlider?.addEventListener('input', () => {
+    if (!tlRange) return;
+    const ratio = Number(tlSlider.value) / 1000;
+    state.timeCursor = tlRange.min + (tlRange.max - tlRange.min) * ratio;
+    updateTlLabel();
+    forest.render();
+  });
+  tlPlay?.addEventListener('click', () => {
+    if (tlInterval) {
+      clearInterval(tlInterval); tlInterval = null; tlPlay.textContent = '▶'; return;
+    }
+    if (Number(tlSlider.value) >= 1000) tlSlider.value = 0;
+    tlPlay.textContent = '⏸';
+    tlInterval = setInterval(() => {
+      const next = Math.min(1000, Number(tlSlider.value) + 8);
+      tlSlider.value = next;
+      tlSlider.dispatchEvent(new Event('input'));
+      if (next >= 1000) { clearInterval(tlInterval); tlInterval = null; tlPlay.textContent = '▶'; }
+    }, 80);
+  });
 
   // テスト/デバッグ用にstateを公開
   window.__morinoki = { state, forest };

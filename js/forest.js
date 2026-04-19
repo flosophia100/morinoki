@@ -221,16 +221,29 @@ export function createForest(canvas, state) {
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
     }
+    // 季節のミスト(春桜/秋紅葉/冬雪 ほか)を薄く重ねる
+    if (atmo.seasonMist) {
+      ctx.save();
+      ctx.fillStyle = atmo.seasonMist;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
+    const cursor = state.timeCursor;
     (state.trees || []).forEach(t => {
-      // liveforest が _displayX/_displayY/_displayScale をセットしていればそれを使用
+      if (cursor) {
+        const ct = Date.parse(t.created_at || 0);
+        if (ct > cursor) return; // まだ植わっていない
+      }
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
       const ds = t._displayScale ?? 1.0;
-      drawTree(ctx, t, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
+      // timelapse中は node もフィルタ
+      const filteredTree = cursor ? { ...t, nodes: (t.nodes || []).filter(n => Date.parse(n.created_at || 0) <= cursor) } : t;
+      drawTree(ctx, filteredTree, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
     });
     ctx.restore();
   }

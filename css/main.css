@@ -227,6 +227,18 @@ body.page-room { overflow: hidden; background: #ede3cf; }
   text-align: center; z-index: 30; display: none;
   letter-spacing: 0.05em;
 }
+.timelapse-bar {
+  position: fixed; left: 340px; right: 20px; bottom: 80px; z-index: 40;
+  background: rgba(244,237,224,0.95); border: 1px solid rgba(74,63,50,0.2);
+  display: flex; gap: 0.5rem; align-items: center; padding: 0.5rem 0.8rem;
+  box-shadow: 0 4px 14px rgba(31,26,21,0.15);
+}
+.timelapse-bar input[type="range"] { flex: 1; }
+.tl-label { font-family: 'Klee One',serif; font-size: 0.78rem; color: var(--ink-soft); min-width: 120px; }
+@media (max-width: 640px) {
+  .timelapse-bar { left: 10px; right: 10px; bottom: calc(50vh + 60px); }
+  .tl-label { min-width: 80px; font-size: 0.72rem; }
+}
 .connection-status.offline { background: rgba(212,105,74,0.95); color: var(--paper); }
 .connection-status.reconnecting { background: rgba(196,154,62,0.95); color: var(--paper); }
 .connection-status.warning { background: rgba(196,154,62,0.9); color: var(--ink); }

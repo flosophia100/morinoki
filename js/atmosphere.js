@@ -27,9 +27,26 @@ function lerpHex(a, b, t) {
   return `rgb(${r},${g},${bl})`;
 }
 
+// 季節プロファイル — atmosphere結果に色味/アンビエントを重ねる
+// 月(0..11)から季節を推定
+function seasonOf(date) {
+  const m = date.getMonth(); // 0=Jan
+  if (m <= 1 || m === 11) return 'winter';
+  if (m <= 4) return 'spring';
+  if (m <= 7) return 'summer';
+  return 'autumn';
+}
+
+// 季節別のアクセント色(描画側で使用)とアンビエント補正
+const SEASON_ACCENT = {
+  spring:  { leaf: '#8dab5e', bloom: '#f4c5cd', mist: 'rgba(240,210,220,0.10)', name: '春' },
+  summer:  { leaf: '#3d5826', bloom: '#b8d98a', mist: 'rgba(170,200,130,0.06)', name: '夏' },
+  autumn:  { leaf: '#a87034', bloom: '#d66f2c', mist: 'rgba(220,150,80,0.12)',  name: '秋' },
+  winter:  { leaf: '#6a7a5a', bloom: '#e6eaf0', mist: 'rgba(230,235,245,0.16)', name: '冬' },
+};
+
 export function atmosphereAt(date = new Date()) {
   const h = date.getHours() + date.getMinutes() / 60;
-  // 最後のkeyframeのhは24
   let prev = KEYFRAMES[0], next = KEYFRAMES[0];
   for (let i = 0; i < KEYFRAMES.length - 1; i++) {
     if (h >= KEYFRAMES[i].h && h < KEYFRAMES[i+1].h) {
@@ -39,11 +56,18 @@ export function atmosphereAt(date = new Date()) {
   }
   const span = next.h - prev.h;
   const t = span > 0 ? (h - prev.h) / span : 0;
+  const season = seasonOf(date);
+  const accent = SEASON_ACCENT[season];
   return {
     top: lerpHex(prev.top, next.top, t),
     bot: lerpHex(prev.bot, next.bot, t),
     ambient: prev.ambient,
     tone: prev.tone,
-    hour: h
+    hour: h,
+    season,
+    seasonName: accent.name,
+    seasonMist: accent.mist,
+    seasonLeaf: accent.leaf,
+    seasonBloom: accent.bloom
   };
 }

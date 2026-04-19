@@ -85,6 +85,14 @@ window.SUPABASE_CONFIG = {
   </div>
 </div>
 
+<!-- タイムラプスコントロール(画面下中央・フッタ上) -->
+<div id="timelapse-bar" class="timelapse-bar hidden">
+  <button id="tl-play" class="btn-icon" title="再生">▶</button>
+  <input id="tl-slider" type="range" min="0" max="1000" value="0">
+  <span id="tl-label" class="tl-label">--</span>
+  <button id="tl-close" class="btn-icon" title="閉じる">×</button>
+</div>
+
 <!-- 復元キー表示 -->
 <div id="recovery-modal" class="modal hidden">
   <div class="modal-panel">

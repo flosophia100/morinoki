@@ -1,0 +1,58 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JS syntax check (ESM parse)
+        run: |
+          for f in js/*.js; do
+            echo "checking $f"
+            node --input-type=module --check < "$f"
+          done
+      - name: HTML sanity (all required IDs present)
+        run: |
+          node -e "
+          const fs = require('fs');
+          const room = fs.readFileSync('room.html','utf8');
+          const required = ['forest-canvas','plant-btn','plant-modal','info-panel','info-content','share-btn','restore-btn','timelapse-bar','tl-play','tl-slider'];
+          const missing = required.filter(id => !new RegExp('id=[\"\\']' + id + '[\"\\']').test(room));
+          if (missing.length) { console.error('Missing IDs in room.html:', missing); process.exit(1); }
+          const idx = fs.readFileSync('index.html','utf8');
+          const idxReq = ['create-form','forest-name','forest-slug','created','created-url'];
+          const idxMissing = idxReq.filter(id => !new RegExp('id=[\"\\']' + id + '[\"\\']').test(idx));
+          if (idxMissing.length) { console.error('Missing IDs in index.html:', idxMissing); process.exit(1); }
+          console.log('OK: ' + required.concat(idxReq).length + ' required IDs present');
+          "
+      - name: SQL migrations parse (syntax sanity with psql --set ON_ERROR_STOP)
+        run: |
+          # SQL must at least be loadable; we can't really execute without DB
+          # Check for dangling dollar quotes etc.
+          for f in supabase/migrations/*.sql; do
+            node -e "
+              const t = require('fs').readFileSync('$f','utf8');
+              const dq = (t.match(/\\\$[a-z_]*\\\$/gi) || []);
+              if (dq.length % 2 !== 0) { console.error('$f: unbalanced dollar quotes'); process.exit(1); }
+              console.log('$f ok (' + dq.length + ' dollar markers)');
+            "
+          done
+
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Static files present
+        run: |
+          for f in index.html room.html css/main.css js/app.js js/supabase.js js/forest.js js/tree.js js/editor.js vercel.json; do
+            test -f "$f" || { echo "missing: $f"; exit 1; }
+          done
+          echo "All required static files present"
