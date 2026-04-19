@@ -17,49 +17,50 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   ctx.fill();
   ctx.restore();
 
-  // --- 層 (a) 中心の詰まった短線:多数、半径0〜0.4 ---
+  // --- 層 (a) 詰まった中心:塗り+粒点で「満杯」感(単一パスで高速) ---
+  // 中央は塗りディスクで詰まり表現、ノイズ粒で質感
+  ctx.save();
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 0.82;
+  ctx.beginPath();
+  ctx.arc(cx, cy, baseR * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // 粒点:中心〜0.55r
   const rngInner = seededRandom(Math.max(1, Math.floor(seed)));
-  const Nin = Math.floor((60 + baseR * 1.1) * density);
+  const Nin = Math.floor((40 + baseR * 0.5) * density);
+  ctx.fillStyle = strokeDark;
   for (let i = 0; i < Nin; i++) {
-    const a = (Math.PI * 2 * i) / Nin + (rngInner() - 0.5) * 0.5;
-    const len = baseR * (0.2 + rngInner() * 0.35);
-    const x2 = cx + Math.cos(a) * len;
-    const y2 = cy + Math.sin(a) * len;
-    ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.6 + rngInner() * 0.35;
-    ctx.lineWidth = 0.7 + rngInner() * 1.3;
+    const a = rngInner() * Math.PI * 2;
+    const r = rngInner() * baseR * 0.55;
+    ctx.globalAlpha = 0.35 + rngInner() * 0.45;
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
+    ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 0.6 + rngInner() * 1.2, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  // --- 層 (b) 中距離層:密、半径0.3〜0.75 ---
+  // --- 層 (b) 中距離:密な短線(seed順で等角分散) ---
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
-  const Nmid = Math.floor((45 + baseR * 0.9) * density);
+  const Nmid = Math.floor((28 + baseR * 0.5) * density);
   for (let i = 0; i < Nmid; i++) {
     const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.35;
-    const len = baseR * (0.45 + rngMid() * 0.35);
-    const midA = a + (rngMid() - 0.5) * 0.35 * jitter;
-    const midR = len * (0.5 + rngMid() * 0.2);
-    const x1 = cx + Math.cos(a) * baseR * 0.08;
-    const y1 = cy + Math.sin(a) * baseR * 0.08;
+    const len = baseR * (0.55 + rngMid() * 0.3);
+    const x1 = cx + Math.cos(a) * baseR * 0.3;
+    const y1 = cy + Math.sin(a) * baseR * 0.3;
     const x2 = cx + Math.cos(a) * len;
     const y2 = cy + Math.sin(a) * len;
-    const mx = cx + Math.cos(midA) * midR;
-    const my = cy + Math.sin(midA) * midR;
     ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.55 + rngMid() * 0.35;
-    ctx.lineWidth = 0.9 + rngMid() * 1.3;
+    ctx.globalAlpha = 0.6 + rngMid() * 0.3;
+    ctx.lineWidth = 0.9 + rngMid() * 1.0;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
-    ctx.quadraticCurveTo(mx, my, x2, y2);
+    ctx.lineTo(x2, y2);
     ctx.stroke();
   }
 
   // --- 層 (c) 外へ突出する長線(ギザギザ感):少数、長さバラツキ大 ---
   const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
-  const Nout = Math.floor((24 + baseR * 0.4) * density);
+  const Nout = Math.floor((22 + baseR * 0.35) * density);
   for (let i = 0; i < Nout; i++) {
     const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
     // 長さが大きくばらつく:短いものと長く突き出すものが混在してギザギザ感

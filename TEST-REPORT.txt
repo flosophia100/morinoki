@@ -1,101 +1,102 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║  morinoki Full E2E Test Report                                ║
 ║  Target: https://morinoki.vercel.app                          ║
-║  Started: 2026-04-19T12:56:56.174Z                            ║
+║  Started: 2026-04-19T13:00:27.982Z                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 ═══════════════════════════════════════════════════════════════
   Section Q: 静的検証(JS構文 + 必須ID)
 ═══════════════════════════════════════════════════════════════
-  [OK 1132ms] Q1. js/*.js すべて ESM構文OK
-  [OK 0ms]   Q2. room.html 必須要素がすべて存在
+  [OK 1814ms] Q1. js/*.js すべて ESM構文OK
+  [OK 1ms]   Q2. room.html 必須要素がすべて存在
   [OK 1ms]   Q3. index.html 必須要素がすべて存在
-  [OK 1ms]   Q4. supabase/migrations dollar-quote バランス
+  [OK 6ms]   Q4. supabase/migrations dollar-quote バランス
 
 ═══════════════════════════════════════════════════════════════
   Section A: 森作成(index.html)
 ═══════════════════════════════════════════════════════════════
-  [OK 3144ms] A1. index.html を配信し正常表示
-  [OK 99ms]  A2. slug自動入力(英小文字+ハイフン+数字)
-  [OK 183ms] A3. 不正slug(大文字/短い)でフォームerror
-  [OK 432ms] A4. 正常な森作成 → URL発行
+  [OK 9973ms] A1. index.html を配信し正常表示
+  [OK 68ms]  A2. slug自動入力(英小文字+ハイフン+数字)
+  [OK 106ms] A3. 不正slug(大文字/短い)でフォームerror
+  [OK 282ms] A4. 正常な森作成 → URL発行
 
 ═══════════════════════════════════════════════════════════════
   Section B: 植樹フロー
 ═══════════════════════════════════════════════════════════════
-  [OK 58ms]  B1. idleパネルに auth フォームが表示
-  [OK 493ms] B2. 合言葉4桁未満で error
+  [OK 47ms]  B1. idleパネルに auth フォームが表示
+  [OK 498ms] B2. 合言葉4桁未満で error
   [SKIP]     B3. (skip: 合言葉確認は廃止)
-  [OK 606ms] B4. 正しく入力で植樹成功 → 復元キー表示
-  [OK 63ms]  B5. 復元キーが表示されている(16hex char)
-             (recoveryKeyA=bdc549b97ce4706a)
-  [OK 49ms]  B6. 復元キーを保持(後続テストで使用)
-  [OK 173ms] B7. 復元キー確認で閉じる → own-tree パネル
+  [OK 521ms] B4. 正しく入力で植樹成功 → 復元キー表示
+  [OK 21ms]  B5. 復元キーが表示されている(16hex char)
+             (recoveryKeyA=1f0da76c298470f0)
+  [OK 16ms]  B6. 復元キーを保持(後続テストで使用)
+  [OK 80ms]  B7. 復元キー確認で閉じる → own-tree パネル
 
 ═══════════════════════════════════════════════════════════════
   Section C: ノードCRUD
 ═══════════════════════════════════════════════════════════════
-  [OK 1106ms] C1. キーワード追加: 音楽
-  [OK 311ms] C2. キーワード追加: 読書
-  [OK 286ms] C3. ノードクリックで編集popover
-  [OK 1026ms] C4. サイズ変更(XL)+保存
-  [OK 894ms] C5. 色変更+保存
-  [OK 1765ms] C6. 説明保存 → back → 再open で残る
-  [OK 402ms] C7. 孫ノード追加: ジャズ
-  [OK 253ms] C8. back → ownTree → 元に戻る
+  [OK 249ms] C1. キーワード追加: 音楽
+  [OK 980ms] C2. キーワード追加: 読書
+  [OK 104ms] C3. ノードクリックで編集popover
+  [OK 714ms] C4. サイズ変更(XL)+保存
+  [OK 721ms] C5. 色変更+保存
+  [OK 1168ms] C6. 説明保存 → back → 再open で残る
+  [OK 329ms] C7. 孫ノード追加: ジャズ
+  [OK 135ms] C8. back → ownTree → 元に戻る
 
 ═══════════════════════════════════════════════════════════════
   Section D: ドラッグ操作
 ═══════════════════════════════════════════════════════════════
-  [OK 3659ms] D1. 幹ドラッグで樹位置が変わる
-  [OK 599ms] D2. ホイールでズーム
+  [FAIL 3367ms] D1. 幹ドラッグで樹位置が変わる
+             → no move: delta=(0.0, 0.0)
+  [OK 481ms] D2. ホイールでズーム
 
 ═══════════════════════════════════════════════════════════════
   Section J: atmosphere(時間帯 + 季節)
 ═══════════════════════════════════════════════════════════════
-  [OK 56ms]  J1. atmosphereAt() が季節情報を返す
-  [OK 42ms]  J2. 深夜と昼で色調が異なる
-  [OK 41ms]  J3. 春/夏/秋/冬 で 4種類のseason
+  [OK 14ms]  J1. atmosphereAt() が季節情報を返す
+  [OK 5ms]   J2. 深夜と昼で色調が異なる
+  [OK 13ms]  J3. 春/夏/秋/冬 で 4種類のseason
 
 ═══════════════════════════════════════════════════════════════
   Section H: 共有モーダル + QR
 ═══════════════════════════════════════════════════════════════
-  [OK 580ms] H1. 共有ボタン → モーダル表示
-  [OK 90ms]  H2. URLが表示されている
-  [OK 110ms] H3. QR画像が src=qrserver を含む
-  [OK 351ms] H4. 閉じるで消える
+  [OK 511ms] H1. 共有ボタン → モーダル表示
+  [OK 96ms]  H2. URLが表示されている
+  [OK 94ms]  H3. QR画像が src=qrserver を含む
+  [OK 325ms] H4. 閉じるで消える
 
 ═══════════════════════════════════════════════════════════════
   Section G: 一人一樹制約 / ログアウト
 ═══════════════════════════════════════════════════════════════
-  [OK 302ms] G1. ログイン中はidleに "ログイン中" + 名前が表示
-  [OK 2086ms] G2. 同じ名前+同じ合言葉でログイン扱い(新規植樹されない)
-  [OK 1349ms] G3. ログアウトでsessionがクリアされる
-  [OK 1107ms] G4. 既存名前+違う合言葉はエラー
+  [OK 304ms] G1. ログイン中はidleに "ログイン中" + 名前が表示
+  [OK 2064ms] G2. 同じ名前+同じ合言葉でログイン扱い(新規植樹されない)
+  [OK 1389ms] G3. ログアウトでsessionがクリアされる
+  [OK 1103ms] G4. 既存名前+違う合言葉はエラー
 
 ═══════════════════════════════════════════════════════════════
   Section I: 復元(合言葉忘れ時)
 ═══════════════════════════════════════════════════════════════
-             state room.slug=full-jh3ia trees=["Aさん"]
-             direct call: {"ok":{"kind":"login","tree_id":"79c2c529-52bc-4700-9b85-d076cf4afcd1","edit_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0cmVlX2lkIiA6ICI3OWMyYzUyOS01MmJjLTQ3MDAtOWI4NS1kMDc2Y2Y0YWZjZDEiLCAiZXhwIiA6IDE3NzcyMDgyNTF9.ss5ckJljmlplogW-mDvEy_KaTPkJdhLO5_yexA7EoUw"}}
-  [OK 5633ms] I1. panelのauth-passに復元キーを入力して復元
-  [OK 2235ms] I2. 復元モーダル(別端末用)も引き続き機能
+             state room.slug=full-cyflx trees=["Aさん"]
+             direct call: {"ok":{"kind":"login","tree_id":"cab86e4e-923c-423d-8e00-09cfc9824d5d","edit_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0cmVlX2lkIiA6ICJjYWI4NmU0ZS05MjNjLTQyM2QtOGUwMC0wOWNmYzk4MjRkNWQiLCAiZXhwIiA6IDE3NzcyMDg0Njl9.IpgoPf_hKo3oPK3gumQ63ntMM5nrX4WgWZG5iBi_0Ho"}}
+  [OK 5600ms] I1. panelのauth-passに復元キーを入力して復元
+  [OK 2305ms] I2. 復元モーダル(別端末用)も引き続き機能
 
 ═══════════════════════════════════════════════════════════════
   Section F: Realtime同期(2ブラウザ間)
 ═══════════════════════════════════════════════════════════════
-  [OK 253ms] F1. Bが森に入るとAさんの樹が見える
-  [OK 1866ms] F2. AのキーワードがBに反映(realtime)
-  [OK 2241ms] F3. Bさんを植樹 → Aに反映
+  [OK 287ms] F1. Bが森に入るとAさんの樹が見える
+  [OK 1945ms] F2. AのキーワードがBに反映(realtime)
+  [OK 2344ms] F3. Bさんを植樹 → Aに反映
 
 ═══════════════════════════════════════════════════════════════
   Section E: 他人視点 + 共通キーワード + 散歩
 ═══════════════════════════════════════════════════════════════
-  [OK 254ms] E1. BからAさんの樹を選択
-  [OK 61ms]  E2. 編集UIが非表示(他人の樹はreadonly)
-  [OK 94ms]  E3. 共通キーワード「音楽」が表示
-  [OK 222ms] E4. 近くの樹リスト表示
-  [FAIL 785ms] E5. 散歩ボタンで別の樹へ遷移
+  [OK 230ms] E1. BからAさんの樹を選択
+  [OK 42ms]  E2. 編集UIが非表示(他人の樹はreadonly)
+  [OK 90ms]  E3. 共通キーワード「音楽」が表示
+  [OK 214ms] E4. 近くの樹リスト表示
+  [FAIL 598ms] E5. 散歩ボタンで別の樹へ遷移
              → elementHandle.click: Element is not attached to the DOM
 Call log:
 [2m  - attempting click action[22m
@@ -105,63 +106,63 @@ Call log:
 ═══════════════════════════════════════════════════════════════
   Section K: タイムラプス(管理者のみ)
 ═══════════════════════════════════════════════════════════════
-  [OK 5838ms] K0. 管理者モード /a/:slug → admin-login フォーム
+  [OK 5793ms] K0. 管理者モード /a/:slug → admin-login フォーム
              [dbg] {"isAdminMode":true,"hasAdminBtn":true,"hasAdminPass":true,"adminPassVisible":true,"panel":"\n    <div class=\"ip-block\">\n      <h2 class=\"ip-title\">Full森</h2>\n      <p class=\"ip-hint\">2 本の樹</p>\n    </div>\n    \n      <div class=\"ip-block ip-auth-form\">\n        <label class=\"mini-label\">管理者としてロ"}
-  [OK 2281ms] K0b. admin passcode で admin_token 取得
-  [OK 308ms] K1. admin 時のみタイムラプスボタンあり
-  [OK 607ms] K2. タイムラプス起動でbar表示
-  [OK 392ms] K3. sliderで timeCursor が動く
-  [OK 1654ms] K4. playで自動進行(500ms後に値増)
-  [OK 942ms] K5. 閉じるで timeCursor が null
+  [OK 2182ms] K0b. admin passcode で admin_token 取得
+  [OK 294ms] K1. admin 時のみタイムラプスボタンあり
+  [OK 642ms] K2. タイムラプス起動でbar表示
+  [OK 404ms] K3. sliderで timeCursor が動く
+  [OK 1820ms] K4. playで自動進行(500ms後に値増)
+  [OK 902ms] K5. 閉じるで timeCursor が null
 
 ═══════════════════════════════════════════════════════════════
   Section L: CSV書き出し(管理者のみ)
 ═══════════════════════════════════════════════════════════════
-  [OK 301ms] L1. admin 時のみ CSVボタン
-  [OK 588ms] L2. ダウンロードイベント発火 + 正しいファイル名
-  [OK 268ms] L3. success toast表示
+  [OK 230ms] L1. admin 時のみ CSVボタン
+  [OK 632ms] L2. ダウンロードイベント発火 + 正しいファイル名
+  [OK 348ms] L3. success toast表示
 
 ═══════════════════════════════════════════════════════════════
   Section AX: 管理者は他人樹を編集可能
 ═══════════════════════════════════════════════════════════════
-  [OK 670ms] AX1. admin で他人樹(Bさん)のノードを追加できる
+  [OK 627ms] AX1. admin で他人樹(Bさん)のノードを追加できる
 
 ═══════════════════════════════════════════════════════════════
   Section NX: 非admin時はタイムラプス/CSV非表示
 ═══════════════════════════════════════════════════════════════
-  [OK 4443ms] NX1. 通常URLに戻る + admin logout → ボタン消える
+  [OK 4728ms] NX1. 通常URLに戻る + admin logout → ボタン消える
 
 ═══════════════════════════════════════════════════════════════
   Section M: Toast / エラー処理
 ═══════════════════════════════════════════════════════════════
-  [OK 5202ms] M1. 不正slug → エラーtoast
+  [OK 5517ms] M1. 不正slug → エラーtoast
 
 ═══════════════════════════════════════════════════════════════
   Section O: 接続状態 (online/offline)
 ═══════════════════════════════════════════════════════════════
-  [OK 1632ms] O1. オフラインにするとバナー表示
-  [OK 3106ms] O2. オンラインに戻るとバナー消える(または online扱い)
+  [OK 1605ms] O1. オフラインにするとバナー表示
+  [OK 3068ms] O2. オンラインに戻るとバナー消える(または online扱い)
 
 ═══════════════════════════════════════════════════════════════
   Section N: モバイルレイアウト
 ═══════════════════════════════════════════════════════════════
-  [OK 123ms] N1. info-panelが下部ドロワー
-  [OK 104ms] N2. 共有ボタン 34px以上
-  [OK 112ms] N3. 復元ボタン 34px以上
+  [OK 93ms]  N1. info-panelが下部ドロワー
+  [OK 76ms]  N2. 共有ボタン 34px以上
+  [OK 62ms]  N3. 復元ボタン 34px以上
 
 ═══════════════════════════════════════════════════════════════
   Section P: パフォーマンス smoke
 ═══════════════════════════════════════════════════════════════
-             FPS: 16.5
-  [FAIL 1529ms] P1. FPS 30以上(tab visible)
-             → fps too low: 16.497294443646343
+             FPS: 21.8
+  [FAIL 1531ms] P1. FPS 30以上(tab visible)
+             → fps too low: 21.770682147869422
 
 ═══════════════════════════════════════════════════════════════
   サマリー
 ═══════════════════════════════════════════════════════════════
   Total:   65
-  Passed:  62
-  Failed:  2
+  Passed:  61
+  Failed:  3
   Skipped: 1
 
   セクション別:
@@ -169,7 +170,7 @@ Call log:
     ✓ Section A: 森作成(index.html)                                   pass=4 fail=0
     ✓ Section B: 植樹フロー                                             pass=6 fail=0
     ✓ Section C: ノードCRUD                                           pass=8 fail=0
-    ✓ Section D: ドラッグ操作                                            pass=2 fail=0
+    ✗ Section D: ドラッグ操作                                            pass=1 fail=1
     ✓ Section J: atmosphere(時間帯 + 季節)                              pass=3 fail=0
     ✓ Section H: 共有モーダル + QR                                       pass=4 fail=0
     ✓ Section G: 一人一樹制約 / ログアウト                                    pass=4 fail=0
@@ -188,5 +189,5 @@ Call log:
   Page A console errors:
     console.error: Failed to load resource: the server responded with a status of 400 ()
 
-  Finished: 2026-04-19T12:58:22.097Z
-  Result:   2 FAILED ✗
+  Finished: 2026-04-19T13:02:01.251Z
+  Result:   3 FAILED ✗
