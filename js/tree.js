@@ -1,75 +1,100 @@
 import { seededRandom, stringHash } from './utils.js';
 
 // ====== 放射状バースト(ノード・幹共通) ======
-// 上から見た樹のように、中央から密に細い線が放射状に伸びるビジュアル。
-// 密度(線の本数)は半径で変化、長さ・幅・湾曲はseedベースの乱数で揺らぎ。
+// 上から見た樹:中央は密に詰まり、外周はギザギザに伸びる。
+// 3層構造: (a) 中心の詰まった短線層  (b) 中長線層  (c) 外へ突出する長線(ギザギザ感)
 export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts = {}) {
-  const { density = 1.0, jitter = 0.5, dots = true } = opts;
-  const rng = seededRandom(Math.max(1, Math.floor(seed)));
-  // 半径比例で線の本数を決める
-  const N = Math.max(18, Math.min(64, Math.floor(baseR * density * 1.2)));
+  const { density = 1.0, jitter = 0.7, dots = true } = opts;
   ctx.save();
   ctx.lineCap = 'round';
+  const strokeDark = strokeCol || col;
 
-  // 影(下へずらした薄いバースト)
+  // --- 影(ベース形状の薄い影) ---
   ctx.save();
-  ctx.strokeStyle = 'rgba(40, 30, 15, 0.12)';
-  ctx.translate(2, 3);
-  for (let i = 0; i < N; i++) {
-    const a = (Math.PI * 2 * i) / N + (rng() - 0.5) * 0.25;
-    const len = baseR * (0.55 + rng() * 0.55);
-    const x1 = cx + Math.cos(a) * baseR * 0.05;
-    const y1 = cy + Math.sin(a) * baseR * 0.05;
+  ctx.fillStyle = 'rgba(40, 30, 15, 0.16)';
+  ctx.beginPath();
+  ctx.arc(cx + 2, cy + 3, baseR * 0.95, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // --- 層 (a) 中心の詰まった短線:非常に多数、半径0〜0.4 ---
+  const rngInner = seededRandom(Math.max(1, Math.floor(seed)));
+  const Nin = Math.floor((130 + baseR * 2.2) * density);
+  for (let i = 0; i < Nin; i++) {
+    const a = (Math.PI * 2 * i) / Nin + (rngInner() - 0.5) * 0.5;
+    const len = baseR * (0.2 + rngInner() * 0.35);
     const x2 = cx + Math.cos(a) * len;
     const y2 = cy + Math.sin(a) * len;
-    const midA = a + (rng() - 0.5) * 0.35 * jitter;
-    const midR = len * (0.5 + rng() * 0.25);
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.6 + rngInner() * 0.35;
+    ctx.lineWidth = 0.7 + rngInner() * 1.3;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+
+  // --- 層 (b) 中距離層:密、半径0.3〜0.75 ---
+  const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
+  const Nmid = Math.floor((90 + baseR * 1.6) * density);
+  for (let i = 0; i < Nmid; i++) {
+    const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.35;
+    const len = baseR * (0.45 + rngMid() * 0.35);
+    const midA = a + (rngMid() - 0.5) * 0.35 * jitter;
+    const midR = len * (0.5 + rngMid() * 0.2);
+    const x1 = cx + Math.cos(a) * baseR * 0.08;
+    const y1 = cy + Math.sin(a) * baseR * 0.08;
+    const x2 = cx + Math.cos(a) * len;
+    const y2 = cy + Math.sin(a) * len;
     const mx = cx + Math.cos(midA) * midR;
     const my = cy + Math.sin(midA) * midR;
-    ctx.lineWidth = 0.6 + rng() * 1.0;
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.55 + rngMid() * 0.35;
+    ctx.lineWidth = 0.9 + rngMid() * 1.3;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.quadraticCurveTo(mx, my, x2, y2);
     ctx.stroke();
   }
-  ctx.restore();
 
-  // 本体の密な放射線(濃淡あり)
-  // seededRandomを再初期化しないと影と同じ乱数になる → 新しいseedで
-  const rng2 = seededRandom(Math.max(1, Math.floor(seed) + 1));
-  for (let i = 0; i < N; i++) {
-    const a = (Math.PI * 2 * i) / N + (rng2() - 0.5) * 0.25;
-    const len = baseR * (0.55 + rng2() * 0.55);
-    const x1 = cx + Math.cos(a) * baseR * 0.05;
-    const y1 = cy + Math.sin(a) * baseR * 0.05;
+  // --- 層 (c) 外へ突出する長線(ギザギザ感):少数、長さバラツキ大 ---
+  const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
+  const Nout = Math.floor((40 + baseR * 0.6) * density);
+  for (let i = 0; i < Nout; i++) {
+    const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
+    // 長さが大きくばらつく:短いものと長く突き出すものが混在してギザギザ感
+    const spike = rngOut() < 0.35;
+    const len = baseR * (spike ? (1.0 + rngOut() * 0.45) : (0.75 + rngOut() * 0.2));
+    const midA = a + (rngOut() - 0.5) * 0.25 * jitter;
+    const midR = len * (0.6 + rngOut() * 0.15);
+    const x1 = cx + Math.cos(a) * baseR * 0.12;
+    const y1 = cy + Math.sin(a) * baseR * 0.12;
     const x2 = cx + Math.cos(a) * len;
     const y2 = cy + Math.sin(a) * len;
-    const midA = a + (rng2() - 0.5) * 0.35 * jitter;
-    const midR = len * (0.5 + rng2() * 0.25);
     const mx = cx + Math.cos(midA) * midR;
     const my = cy + Math.sin(midA) * midR;
-    ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.45 + rng2() * 0.45;
-    ctx.lineWidth = 0.7 + rng2() * 1.4;
+    ctx.strokeStyle = spike ? strokeDark : col;
+    ctx.globalAlpha = spike ? (0.75 + rngOut() * 0.25) : (0.6 + rngOut() * 0.3);
+    ctx.lineWidth = spike ? (1.1 + rngOut() * 1.3) : (0.8 + rngOut() * 1.0);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.quadraticCurveTo(mx, my, x2, y2);
     ctx.stroke();
-    // 終点に小さな点で葉っぽさを強調(確率的に)
-    if (dots && rng2() < 0.55) {
-      ctx.globalAlpha = 0.7 + rng2() * 0.3;
+    // 先端に葉の点
+    if (dots && rngOut() < 0.6) {
+      ctx.globalAlpha = 0.75 + rngOut() * 0.25;
       ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.arc(x2, y2, 0.8 + rng2() * 1.4, 0, Math.PI * 2);
+      ctx.arc(x2, y2, 0.9 + rngOut() * 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
   ctx.globalAlpha = 1;
 
-  // 中心のアンカー(濃い縁取り色)
-  ctx.fillStyle = strokeCol || col;
+  // 中心のアンカー(小)
+  ctx.fillStyle = strokeDark;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(1.8, baseR * 0.12), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(1.6, baseR * 0.08), 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
@@ -175,8 +200,9 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0) {
       if (child.simDX != null) ex += child.simDX;
       if (child.simDY != null) ey += child.simDY;
 
-      const sizeScale = depth === 0 ? 1 : 0.72;
-      const nr = (12 + (child.size || 3) * 3.6) * scale * sizeScale;
+      // 葉ノードも十分な存在感を持つよう大きめに
+      const sizeScale = depth === 0 ? 1 : 0.92;
+      const nr = (18 + (child.size || 3) * 5.0) * scale * sizeScale;
 
       out.push({
         node: child, x: ex, y: ey,
@@ -247,10 +273,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.restore();
     }
 
-    if (p.nr >= 16 * scale) {
+    if (p.nr >= 20 * scale) {
       ctx.save();
       ctx.fillStyle = 'rgba(255, 252, 244, 0.92)';
-      ctx.font = `${Math.max(10, p.nr * 0.48)}px 'Klee One', serif`;
+      ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       // 中央に少し背景つける(可読性のため)
