@@ -22,9 +22,9 @@ const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } }
 const pageB = await ctxB.newPage();
 const errorsA = [], errorsB = [];
 pageA.on('pageerror', e => errorsA.push('A/pageerror: ' + e.message));
-pageA.on('console', m => { if (m.type()==='error') errorsA.push('A/console.error: ' + m.text()); });
+pageA.on('console', m => { const t = m.text(); if (m.type()==='error') errorsA.push('A/err: '+t); else console.log('[A.'+m.type()+']', t); });
 pageB.on('pageerror', e => errorsB.push('B/pageerror: ' + e.message));
-pageB.on('console', m => { if (m.type()==='error') errorsB.push('B/console.error: ' + m.text()); });
+pageB.on('console', m => { const t = m.text(); if (m.type()==='error') errorsB.push('B/err: '+t); else console.log('[B.'+m.type()+']', t); });
 
 // 1. 森作成
 console.log('=== 森作成(A) ===');

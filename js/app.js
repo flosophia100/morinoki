@@ -156,10 +156,12 @@ async function initRoom() {
   forest.render();
 
   // ===== Phase 2: 生きている森 =====
+  console.log('[phase2] init');
   const treeIdsRef = new Set((state.trees || []).map(t => t.id));
   const live = new LiveForest(() => state.trees, () => forest.render());
   live.notifyDataChanged();
   live.start();
+  console.log('[phase2] liveforest started, treeIds:', [...treeIdsRef]);
 
   // Realtime購読: 他ユーザーの変更を検知 → reload
   const onRealtime = debounce(async ({ source, payload }) => {

@@ -3,30 +3,32 @@ import { supabase } from './supabase.js';
 // ルーム内の trees/nodes 変更を購読し、onChange で通知
 // onChange は debounce して呼ぶ想定
 export function subscribeRoom(roomId, treeIdsRef, onChange) {
-  if (!supabase) return () => {};
+  console.log('[realtime] subscribeRoom called, roomId=', roomId);
+  if (!supabase) { console.warn('[realtime] supabase null'); return () => {}; }
 
   const channel = supabase
     .channel(`morinoki-room-${roomId}`)
-    // trees: room_id で絞り込み
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'trees', filter: `room_id=eq.${roomId}` },
-      (payload) => { onChange({ source: 'trees', payload }); }
+      (payload) => {
+        console.log('[realtime] tree event:', payload.eventType, payload.new?.name || payload.old?.name);
+        onChange({ source: 'trees', payload });
+      }
     )
-    // nodes: room_id カラムがないのでクライアント側で tree_id をチェック
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'nodes' },
       (payload) => {
         const row = payload.new || payload.old || {};
+        console.log('[realtime] node event:', payload.eventType, 'tree_id=', row.tree_id, 'text=', row.text);
         if (treeIdsRef.has(row.tree_id)) {
           onChange({ source: 'nodes', payload });
         }
       }
     )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') console.log('[realtime] subscribed:', roomId);
-      else if (status === 'CHANNEL_ERROR') console.warn('[realtime] channel error');
+    .subscribe((status, err) => {
+      console.log('[realtime] subscribe status:', status, err?.message || '');
     });
 
   return () => {
