@@ -1,6 +1,7 @@
 import { drawTree, trunkRadiusFor } from './tree.js';
 import { seededRandom } from './utils.js';
 import { atmosphereAt } from './atmosphere.js';
+import { Critters, drawBackgroundCanopies } from './critters.js';
 
 export function layoutRandom(trees) {
   trees.forEach((t) => {
@@ -18,6 +19,8 @@ export function layoutRandom(trees) {
 export function createForest(canvas, state) {
   const ctx = canvas.getContext('2d');
   let dpr = 1, W = 0, H = 0;
+  const critters = new Critters();
+  let lastTickAt = performance.now();
 
   function resize() {
     dpr = window.devicePixelRatio || 1;
@@ -210,27 +213,30 @@ export function createForest(canvas, state) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   function render() {
+    // critters tick(前回のrenderからの経過時間で)
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - lastTickAt) / 1000);
+    lastTickAt = now;
+    critters.tick(dt, W, H);
+
     ctx.clearRect(0, 0, W, H);
-    // 時間帯で背景色を変化
     const atmo = state.atmo || atmosphereAt();
     const bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, atmo.top); bg.addColorStop(1, atmo.bot);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-    // ambient overlay (夜の霞/朝のもや)
     if (atmo.ambient) {
-      ctx.save();
-      ctx.fillStyle = atmo.ambient;
-      ctx.fillRect(0, 0, W, H);
-      ctx.restore();
+      ctx.save(); ctx.fillStyle = atmo.ambient; ctx.fillRect(0, 0, W, H); ctx.restore();
     }
-    // 季節のミスト(春桜/秋紅葉/冬雪 ほか)を薄く重ねる
     if (atmo.seasonMist) {
-      ctx.save();
-      ctx.fillStyle = atmo.seasonMist;
-      ctx.fillRect(0, 0, W, H);
-      ctx.restore();
+      ctx.save(); ctx.fillStyle = atmo.seasonMist; ctx.fillRect(0, 0, W, H); ctx.restore();
     }
 
+    // 背景の小さな canopy 群(ノード総数で密度が増える)
+    const totalNodes = (state.trees || []).reduce((s, t) => s + (t.nodes?.length || 0), 0);
+    const roomSeed = (state.room?.slug || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) || 42;
+    drawBackgroundCanopies(ctx, W, H, totalNodes, roomSeed);
+
+    // 樹(world coords)
     ctx.save();
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
@@ -238,16 +244,18 @@ export function createForest(canvas, state) {
     (state.trees || []).forEach(t => {
       if (cursor) {
         const ct = Date.parse(t.created_at || 0);
-        if (ct > cursor) return; // まだ植わっていない
+        if (ct > cursor) return;
       }
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
       const ds = t._displayScale ?? 1.0;
-      // timelapse中は node もフィルタ
       const filteredTree = cursor ? { ...t, nodes: (t.nodes || []).filter(n => Date.parse(n.created_at || 0) <= cursor) } : t;
       drawTree(ctx, filteredTree, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
     });
     ctx.restore();
+
+    // critters は screen 座標で最前面に
+    critters.render(ctx);
   }
 
   return { render, resize, screenToWorld };
