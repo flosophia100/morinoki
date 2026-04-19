@@ -61,10 +61,11 @@ function initIndex() {
 
 async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
-  const { openPlantModal, renderInfoPanel } = await import('./editor.js');
+  const { openPlantModal, renderInfoPanel, openShareModal, openRestoreModal } = await import('./editor.js');
   const { loadSession, isTokenExpired, clearSession } = await import('./auth.js');
   const { subscribeRoom, debounce } = await import('./realtime.js');
   const { LiveForest } = await import('./liveforest.js');
+  const { atmosphereAt } = await import('./atmosphere.js');
 
   const slug = location.pathname.match(/\/r\/([^\/]+)/)?.[1] || new URLSearchParams(location.search).get('slug');
   if (!slug) { alert('ルームが指定されていません'); return; }
@@ -74,7 +75,8 @@ async function initRoom() {
     onTrunkTap: null, onNodeTap: null, onEmptyTap: null,
     onTreeMoved: null, onNodeMoved: null,
     view: null,
-    selection: null, // { kind:'tree', tree } | { kind:'node', tree, node } | null
+    selection: null,
+    atmo: atmosphereAt(), // 時間帯(render時に毎回最新を使うので実質更新)
   };
 
   try { state.room = await api.getRoomBySlug(slug); }
@@ -246,6 +248,27 @@ async function initRoom() {
     });
   }
   document.getElementById('plant-btn').addEventListener('click', openPlanting);
+
+  // 共有ボタン
+  document.getElementById('share-btn').addEventListener('click', () => {
+    const url = `${location.origin}/r/${state.room.slug}`;
+    openShareModal(url);
+  });
+
+  // 復元ボタン
+  document.getElementById('restore-btn').addEventListener('click', () => {
+    openRestoreModal(state, async (sess) => {
+      state.session = sess;
+      state.selfTreeId = sess.treeId;
+      await reload();
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) state.selection = { kind: 'tree', tree: mine };
+      updatePanel(); updatePlantBtn(); forest.render();
+    });
+  });
+
+  // 時間帯を1分ごとに更新(1時間/24段階でゆっくり推移)
+  setInterval(() => { state.atmo = atmosphereAt(); forest.render(); }, 60000);
 
   async function reload() {
     const trees = await api.getTrees(state.room.id);

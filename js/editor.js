@@ -1,6 +1,54 @@
 import { api } from './supabase.js';
-import { saveSession } from './auth.js';
+import { saveSession, loadSession } from './auth.js';
 import { escapeHtml } from './utils.js';
+
+// ===== 共有モーダル =====
+export function openShareModal(forestUrl) {
+  const m = document.getElementById('share-modal');
+  document.getElementById('share-url').textContent = forestUrl;
+  const qr = document.getElementById('share-qr');
+  qr.innerHTML = `<img alt="QR code" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(forestUrl)}">`;
+  m.classList.remove('hidden');
+  document.getElementById('share-close').onclick = () => m.classList.add('hidden');
+  const copyBtn = document.getElementById('share-copy');
+  copyBtn.textContent = 'URLをコピー';
+  copyBtn.onclick = async () => {
+    try { await navigator.clipboard.writeText(forestUrl); copyBtn.textContent = 'コピーしました'; }
+    catch { copyBtn.textContent = 'コピーできませんでした'; }
+  };
+}
+
+// ===== 復元モーダル =====
+export function openRestoreModal(state, onRestored) {
+  const m = document.getElementById('restore-modal');
+  const err = document.getElementById('restore-error');
+  const nameInput = document.getElementById('restore-name');
+  const secretInput = document.getElementById('restore-secret');
+  err.classList.add('hidden');
+  nameInput.value = ''; secretInput.value = '';
+  m.classList.remove('hidden');
+  nameInput.focus();
+
+  document.getElementById('restore-cancel').onclick = () => m.classList.add('hidden');
+  document.getElementById('restore-submit').onclick = async () => {
+    err.classList.add('hidden');
+    const nm = nameInput.value.trim();
+    const secret = secretInput.value.trim();
+    if (!nm || !secret) return showErr('名前と合言葉(または復元キー)を入力してください');
+    // 同名の木を探す(ルーム内)
+    const candidate = (state.trees || []).find(t => t.name === nm);
+    if (!candidate) return showErr(`「${nm}」という名前の樹がこの森にありません`);
+    try {
+      const token = await api.authTree(candidate.id, secret);
+      saveSession(state.room.slug, { treeId: candidate.id, editToken: token, treeName: nm });
+      m.classList.add('hidden');
+      onRestored && onRestored({ treeId: candidate.id, editToken: token, treeName: nm });
+    } catch (e) {
+      showErr('認証に失敗しました: ' + (e.message || ''));
+    }
+  };
+  function showErr(msg){ err.textContent = msg; err.classList.remove('hidden'); }
+}
 
 const PALETTE = ['#5a6b3e','#8b6a4a','#c49a3e','#d4694a','#6b4a2b','#3a4828','#b8c18c','#e8a298','#7d8f5a','#a87e55'];
 
@@ -64,7 +112,7 @@ export function renderInfoPanel(state, selection, callbacks) {
       el.innerHTML = ownTreeHTML(selection.tree);
       wireOwnTree(el, state, selection.tree, callbacks);
     } else {
-      el.innerHTML = otherTreeHTML(selection.tree);
+      el.innerHTML = otherTreeHTML(selection.tree, state);
       wireOtherTree(el, state, selection.tree, callbacks);
     }
     return;
@@ -187,10 +235,16 @@ function wireOwnTree(el, state, tree, cb) {
 }
 
 // ----- 他人の樹 -----
-function otherTreeHTML(tree) {
+function otherTreeHTML(tree, state) {
   const topLevel = (tree.nodes || []).filter(n => !n.parent_id).sort((a,b) => (a.ord||0) - (b.ord||0));
   const d = new Date(tree.createdAt || tree.created_at);
   const dateStr = isNaN(d) ? '' : ` · ${d.getMonth()+1}月${d.getDate()}日`;
+
+  // 共通キーワードと近くの樹を計算
+  const myTree = state?.trees?.find(t => t.id === state.selfTreeId);
+  const common = myTree ? findCommonKeywords(myTree, tree) : [];
+  const near = findNearbyTrees(tree, state?.trees || [], 3);
+
   return `
     <div class="ip-block">
       <p class="ip-back-link"><button data-action="to-idle" class="btn-link">← 森へ戻る</button></p>
@@ -205,7 +259,64 @@ function otherTreeHTML(tree) {
         ? '<p class="ip-hint">まだありません</p>'
         : `<ul class="ip-kw-list">${topLevel.map(n => kwItemReadHTML(tree, n)).join('')}</ul>`}
     </div>
+    ${common.length > 0 ? `
+      <div class="ip-block">
+        <label class="mini-label">あなたとの共通キーワード</label>
+        <div class="ip-common">${common.map(c => `<span class="common-chip">${escapeHtml(c.mine)}${c.theirs !== c.mine ? ` ⇄ ${escapeHtml(c.theirs)}` : ''}</span>`).join('')}</div>
+      </div>
+    ` : ''}
+    ${near.length > 0 ? `
+      <div class="ip-block">
+        <label class="mini-label">近くにいる樹</label>
+        <ul class="ip-near-list">
+          ${near.map(n => `<li data-tree-id="${n.tree.id}"><span class="dot-sm" style="background:${n.tree.id === state?.selfTreeId ? '#c49a3e' : '#6b4a2b'}"></span>${escapeHtml(n.tree.name)}${n.tree.id === state?.selfTreeId ? ' (あなた)' : ''}<span class="sim-hint">類似 ${Math.round(n.sim * 100)}%</span></li>`).join('')}
+        </ul>
+      </div>
+    ` : ''}
   `;
+}
+
+// 自分と相手の共通キーワード
+function findCommonKeywords(mine, other) {
+  const mineTexts = (mine.nodes || []).map(n => ({ raw: n.text, norm: (n.text || '').toLowerCase().trim() }));
+  const otherTexts = (other.nodes || []).map(n => ({ raw: n.text, norm: (n.text || '').toLowerCase().trim() }));
+  const seen = new Set();
+  const out = [];
+  for (const m of mineTexts) {
+    for (const o of otherTexts) {
+      if (!m.norm || !o.norm) continue;
+      const key = m.norm + '|' + o.norm;
+      if (seen.has(key)) continue;
+      let match = false;
+      if (m.norm === o.norm) match = true;
+      else if (m.norm.length >= 2 && o.norm.length >= 2 && (m.norm.includes(o.norm) || o.norm.includes(m.norm))) match = true;
+      if (match) { seen.add(key); out.push({ mine: m.raw, theirs: o.raw }); }
+    }
+  }
+  return out.slice(0, 6);
+}
+
+// 森の中で「この樹」に近い樹(空間距離ベース)
+function findNearbyTrees(tree, allTrees, n) {
+  const cx = tree._displayX ?? tree.x;
+  const cy = tree._displayY ?? tree.y;
+  return allTrees
+    .filter(t => t.id !== tree.id)
+    .map(t => {
+      const dx = (t._displayX ?? t.x) - cx, dy = (t._displayY ?? t.y) - cy;
+      return { tree: t, dist: Math.hypot(dx, dy), sim: keywordSim(tree, t) };
+    })
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, n);
+}
+
+function keywordSim(a, b) {
+  const ka = new Set((a.nodes || []).map(n => (n.text || '').toLowerCase().trim()));
+  const kb = new Set((b.nodes || []).map(n => (n.text || '').toLowerCase().trim()));
+  if (!ka.size || !kb.size) return 0;
+  let overlap = 0;
+  for (const x of ka) if (kb.has(x)) overlap++;
+  return overlap / Math.max(ka.size, kb.size);
 }
 function kwItemReadHTML(tree, node) {
   const sub = (tree.nodes || []).filter(n => n.parent_id === node.id);
@@ -229,6 +340,14 @@ function wireOtherTree(el, state, tree, cb) {
       const nid = li.dataset.nodeId;
       const node = tree.nodes.find(n => n.id === nid);
       if (node && cb.onSelectNode) cb.onSelectNode(tree, node);
+    });
+  });
+  // 近くの樹クリックで選択切替
+  el.querySelectorAll('.ip-near-list li[data-tree-id]').forEach(li => {
+    li.addEventListener('click', () => {
+      const tid = li.dataset.treeId;
+      const t = (state.trees || []).find(x => x.id === tid);
+      if (t && cb.onSelectTree) cb.onSelectTree(t);
     });
   });
 }

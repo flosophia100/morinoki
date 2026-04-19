@@ -1,5 +1,6 @@
 import { drawTree, trunkRadiusFor } from './tree.js';
 import { seededRandom } from './utils.js';
+import { atmosphereAt } from './atmosphere.js';
 
 export function layoutRandom(trees) {
   trees.forEach((t) => {
@@ -171,9 +172,18 @@ export function createForest(canvas, state) {
 
   function render() {
     ctx.clearRect(0, 0, W, H);
+    // 時間帯で背景色を変化
+    const atmo = state.atmo || atmosphereAt();
     const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#f2ead4'); bg.addColorStop(1, '#e2d4b5');
+    bg.addColorStop(0, atmo.top); bg.addColorStop(1, atmo.bot);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    // ambient overlay (夜の霞/朝のもや)
+    if (atmo.ambient) {
+      ctx.save();
+      ctx.fillStyle = atmo.ambient;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(state.view.ox, state.view.oy);
