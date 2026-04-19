@@ -180,8 +180,10 @@ function wireIdle(el, state, cb) {
     const email = el.querySelector('#auth-email')?.value.trim() || null;
     if (!nm) return showErr('名前を入力してください');
     if (pw.length < 4) return showErr('合言葉は4桁以上です');
+    if (!cb.onAuthSubmit) return;
     try {
-      await cb.onAuthSubmit && cb.onAuthSubmit({ name: nm, passcode: pw, email });
+      // ★ `await X && Y` は (await X) && Y と解釈されるため括弧必須
+      await cb.onAuthSubmit({ name: nm, passcode: pw, email });
     } catch (e) {
       showErr(e.message || '入れませんでした');
     }

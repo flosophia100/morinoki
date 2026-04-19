@@ -1,0 +1,590 @@
+# 森(morinoki)機能ドキュメント
+
+> ひとりが一本の樹になり、クラスはひとつの森になる。
+> 自分を、キーワードで植える。
+
+**本番URL**: https://morinoki.vercel.app
+**対象バージョン**: 2026-04 時点(Phase 5 完了)
+**構成形態**: 静的配信のウェブアプリ(フロント: Vanilla ES Modules + Canvas 2D / バック: Supabase)
+
+---
+
+## 目次
+
+1. [サマリ](#1-サマリ)
+2. [ユーザー視点の機能カタログ](#2-ユーザー視点の機能カタログ)
+3. [画面一覧](#3-画面一覧)
+4. [データモデル概略](#4-データモデル概略)
+5. [対応済みのセキュリティ対策](#5-対応済みのセキュリティ対策)
+6. [制約・仕様](#6-制約仕様)
+7. [既知の制約・未実装](#7-既知の制約未実装)
+
+---
+
+## 1. サマリ
+
+**morinoki**(森)は、クラスやコミュニティを一つの「森」に見立て、参加者それぞれが「樹」となって自分を表現するウェブアプリです。利用者は森の名前を決めて URL を発行し、その URL を仲間と共有するだけで同じ森に入り、名前の幹と色つきキーワードの枝葉からなる「自分の樹」を植えられます。似たキーワードを持つ樹同士は菌根ネットワークのようにゆっくり引き寄せ合い、森全体は時刻と季節に合わせて色と光が移ろい続ける——そんな自己紹介・共通点発見のためのウェブサービスです。常に他の人の変更がリアルタイムで反映され、タイムラプスで森の成長を振り返ることもできます。
+
+---
+
+## 2. ユーザー視点の機能カタログ
+
+### 2.1 森の作成・共有・参加
+
+#### 一般ユーザー向け
+
+- **新しい森をつくる**: トップページ(`/`)で森の名前(例: `3年A組の森`)と URL 用の合言葉(slug)を決めると、`https://morinoki.vercel.app/r/<slug>` という固有 URL が発行されます。
+- **ランダム slug 提案**: URL 欄は読み込み時に `midori-mori-1234` のような日本語ローマ字混じりの候補で自動補完されるため、迷わずすぐ始められます。
+- **URL のコピー**: 森作成後に表示される URL は「URLをコピー」ボタンでワンタップでコピー可能です。「森に入る →」でそのまま入森できます。
+- **森への参加(招待 URL)**: 共有された `/r/<slug>` を開くだけで、その森のビューに直接入れます。ログインや会員登録は不要。
+- **QR コードで共有**: 森の画面右上の「↗」ボタンから共有モーダルを開くと、URL と QR コード画像(`api.qrserver.com` 経由で生成)が表示され、教室で画面に映して参加者にスキャンしてもらう運用も可能です。
+- **URL コピー(ルーム内)**: 共有モーダルの「URLをコピー」ボタンで再度 URL をクリップボードへ。
+
+#### 開発者向け(内部仕様)
+
+- トップページは `index.html`(`page-index` クラス)で、`js/app.js > initIndex()` が初期化。
+- slug 検証は `utils.js > isValidSlug()`: `^[a-z0-9-]{3,40}$`。
+- 森作成は `rpc('create_room', { p_slug, p_name })`(`supabase/migrations/001_init.sql`)。
+- Vercel `rewrites` で `/r/:slug` → `/room.html` が解決される(`vercel.json`)。
+- 森画面(`room.html`)は `js/app.js > initRoom()` が初期化、`slug` を `location.pathname` から抽出(`/r/([^\/]+)` の match か `?slug=` クエリ)。
+
+---
+
+### 2.2 樹の植樹・ログイン・再認証
+
+#### 一般ユーザー向け
+
+- **樹を植える**: 画面下中央の「+ 樹を植える」ボタンから植樹モーダルを開き、名前・合言葉(4〜10 桁)・確認用合言葉・メール(任意)を入力すると、自分の樹がその場に生えます。
+- **自分の樹は 1 本だけ**(「一人一樹」制約): 同じ森の中で同じ名前の樹は 1 本しか作れません(migration 007 の unique 制約 `trees_room_name_unique`)。植樹後にボタンは「自分の樹」に変わり、タップで自分の樹にフォーカス移動します。
+- **復元キーの発行**: 植樹直後に一度だけ、16 桁の英数字の「復元キー」が表示されます。合言葉を忘れた時の保険なので必ず控えることが促されます(「コピー」「保存した」ボタン付きモーダル)。
+- **セッションの自動維持**: 一度植えた樹は同じブラウザの `localStorage`(`mori.session.<slug>`)に JWT が保存され、再訪しても自動的に「自分の樹」として編集権限を保持します。JWT は 7 日間有効。
+- **別端末からの復元**: ヘッダ右上の「⚘」ボタンで復元モーダルを開き、名前 +(合言葉 or 復元キー)を入力すると再認証されて編集権限が戻ります。
+- **別の人として入り直す**(ログアウト): 左パネル idle 状態の「別の人として入り直す」リンクで、現在のセッションをクリア(確認ダイアログあり)。復元キーと合言葉があれば後から再認証可能。
+
+#### 開発者向け(内部仕様)
+
+- 植樹: `rpc('create_tree', { p_room_slug, p_name, p_passcode, p_email })` → `{tree_id, recovery_key}` を返す(`001_init.sql`)。
+- 合言葉・復元キーは `extensions.crypt(secret, gen_salt('bf'))` で bcrypt ハッシュ化して `trees.passcode_hash` / `trees.recovery_key_hash` に格納。
+- 認証: `rpc('auth_tree', { p_tree_id, p_secret })` が passcode_hash か recovery_key_hash のいずれかに一致すれば `sign_edit_token(tree_id)` で JWT を発行。
+- JWT は HS256、payload = `{tree_id, exp}`、`exp = now + 7日`。署名鍵は `public._config` テーブルの `jwt_secret`(RLS で完全遮断)。
+- クライアント側のトークン期限チェック: `auth.js > isTokenExpired()`。
+- `plant_or_login`(migration 007、現在フロントで未使用だが RPC として公開)は名前で既存 tree を探し、あればログイン、なければ植樹+復元キー発行を一括で返す統合 API。
+
+---
+
+### 2.3 キーワード(ノード)管理
+
+樹は「幹(名前)」と「枝葉(キーワード=ノード)」で構成されます。キーワードは二階層までネスト可能で、それぞれサイズ・色・説明を持てます。
+
+#### キーワードの追加
+
+- **トップレベル**: 自分の樹の幹をタップすると左パネルに入力欄が現れ、「例: 音楽」のように打って「＋」または Enter で追加。即座に枝先にノードが生えます。
+- **孫ノード(子キーワード)**: キーワードをタップして詳細を開くと、下部に「子のキーワード(孫ノード)」の入力欄があり、そこから階層下のキーワードを追加できます。親の色が初期値として受け継がれます。
+- **最大 20 文字**: 入力欄は `maxlength="20"`。
+
+#### キーワードの編集
+
+- **キーワード本文**: テキスト入力欄で上書き可能。
+- **サイズ**: `XS / S / M / L / XL`(内部値 1〜5)の 5 段階。葉の直径と枝の長さに反映されます(`5 + size * 2` が葉の半径基準)。
+- **色**: 10 色のパレットから選択。
+  - パレット: `#5a6b3e`(苔)/ `#8b6a4a`(土)/ `#c49a3e`(金)/ `#d4694a`(朱)/ `#6b4a2b`(樹皮)/ `#3a4828`(深緑)/ `#b8c18c`(若葉)/ `#e8a298`(桜)/ `#7d8f5a`(青葉)/ `#a87e55`(土灰)
+- **説明**: 300 字までの自由記述(任意)。設定すると葉の上に金色の「…」マークが点き、タップで閲覧できます。
+- **削除**: 「削除」ボタン(ダイアログで確認)。削除時は孫ノードも連鎖削除されます。
+
+#### 閲覧側
+
+- **他人のノード**: ノードをタップすると色付き丸+キーワード名と説明、関連するキーワード(孫)が左パネルに表示されます。説明がなければ「(説明なし)」。
+
+#### 開発者向け(内部仕様)
+
+- テーブル: `public.nodes(id, tree_id, parent_id, text, size, color, ord, description, offset_x, offset_y, created_at)`。
+- 保存: `rpc('upsert_node', {p_edit_token, p_tree_id, p_id, p_text, p_size, p_color, p_ord, p_description, p_offset_x, p_offset_y, p_parent_id})`。既存なら update、`p_id=null` なら insert。
+- 削除: `rpc('delete_node', {p_edit_token, p_node_id})`。`on delete cascade` で子孫も消える(`003_nested.sql`)。
+- フィールドクリア: `rpc('clear_node_field', {p_edit_token, p_node_id, p_field in ('description','offset')})` で明示的に NULL 化可能。
+- `size` は smallint、`check (size between 1 and 5)` 制約。
+- `parent_id` は同一 tree 内のノードに限定される(`upsert_node` 内で検証: 'parent not in same tree')。
+- 更新時は `parent_id` を変更しない設計(構造の安定性のため)。
+
+---
+
+### 2.4 操作(ドラッグ・ピンチズーム・タップ)
+
+#### 一般ユーザー向け
+
+- **パン**(森の移動): 空いた場所をドラッグで森全体をスクロール。
+- **ズーム**:
+  - PC: マウスホイールでズームイン/アウト(カーソル位置中心)。
+  - モバイル: 二本指ピンチでズームイン/アウト(ピンチの中心を軸にスケール)。
+  - スケール範囲: 0.25〜3.5 倍。
+- **幹のドラッグ**(自分の樹のみ): 自分の樹の幹をつかんで移動させると、位置が DB に保存されます。他の人の画面にもリアルタイムで反映。
+- **キーワードのドラッグ**(自分の樹のみ): 枝先のキーワードを個別につかんで移動させると、`offset_x / offset_y` として DB に保存され、枝の角度と長さが記憶されます。
+- **タップ**:
+  - 樹の幹タップ → 左パネルにその樹の情報が表示
+  - キーワードタップ → 左パネルにそのキーワードの詳細表示
+  - 空白タップ → 選択解除(idle 状態へ)
+- **タップとドラッグの区別**: 移動量 6px 以下ならタップ扱い、それ以上はドラッグ扱い。
+
+#### 開発者向け(内部仕様)
+
+- 入力ハンドリングは `js/forest.js`(`mousedown/move/up` と `touchstart/move/end` の両方を実装)。
+- ヒットテストは `_displayX/_displayY`(ゆらぎ反映後の位置)で判定。深さ優先で孫ノード > 親ノード > 幹の順。
+- 幹のタッチ範囲: `_trunkR`(`26〜48px * scale`、名前長で変化)。
+- ノードのタッチ範囲: `_r`(`(5 + size*2) * scale * (depth===0 ? 1 : 0.78)`)。
+- 保存 API:
+  - 幹移動: `api.updateTreePosition(token, treeId, x, y)` → `rpc('update_tree_position')`(`002_detail_drag.sql`)。
+  - ノード移動: `api.upsertNode(..., offset_x, offset_y)` で `offset_x/y` を上書き。
+- ドラッグ中の樹は `_dragging=true` となり、ゆらぎ/drift の対象外になる。
+
+---
+
+### 2.5 閲覧機能(他人の樹・共通キーワード・近くの樹・散歩)
+
+#### 一般ユーザー向け
+
+- **他人の樹の詳細**: 他人の幹をタップすると、左パネルにその人の名前、植樹日、キーワード数、キーワード一覧が表示されます。
+- **共通キーワードの提示**: 自分の樹と相手の樹に一致/部分一致するキーワードがあれば、「あなたとの共通キーワード」として金色のチップで列挙(最大 6 件)。完全一致だけでなく、部分一致(`パン` と `パン作り` など、2 文字以上かつ包含関係)も拾います。
+- **近くにいる樹**: 相手の樹から空間距離が近い 3 本が列挙され、それぞれキーワード類似度(%)が併記されます。タップで切替可能。自分自身には「(あなた)」マークが付きます。
+- **散歩モード**: 「散歩 — 近くの樹へ進む」ボタンで、自分以外の樹の中で最も類似度の高い樹へ自動遷移。たどりながら「似たもの同士の連鎖」を散策できます。
+- **孫キーワードへの遷移**: 「関連するキーワード」リストから孫ノードを直接タップして開けます。
+
+#### 開発者向け(内部仕様)
+
+- `editor.js > findCommonKeywords(mine, other)`: 小文字化・トリム後に完全一致または 2 文字以上の包含関係を共通判定。最大 6 件を `[{mine, theirs}]` で返す。
+- `editor.js > findNearbyTrees(tree, allTrees, n)`: `_displayX/_displayY` を基準に空間距離でソート、`sim = keywordSim(a,b)` を付与。
+- `editor.js > keywordSim(a, b)`: 完全一致ベースの Jaccard 風(`overlap / max(|ka|,|kb|)`)。
+- 散歩ロジック(`wireOtherTree` 内): `findNearbyTrees(..., 5)` を `sim` の降順で並び替え、自分と相手以外の top を選択。
+
+---
+
+### 2.6 生きている森(ゆらぎ・引力・斥力・成長アニメ・時間帯演出・季節テーマ)
+
+morinoki の美的な芯となる層。`js/liveforest.js` がクライアント側で 60fps のループを回し、DB には一切書き込まず視覚演出のみ行います。
+
+#### 一般ユーザー向け
+
+- **ゆらぎ(風)**: 各樹が独自の位相でゆっくりと上下左右に揺れ、森全体が呼吸しているように見えます。位相は `tree.seed` からハッシュ算出されるので、同じ樹は常に同じリズム。
+- **菌根ネットワーク(引力)**: 似たキーワードを多く共有する樹同士は、画面上の表示位置でお互いに近づきます。類似度が高いほど目標距離が短くなる(200〜400 px 範囲)。
+- **絡まり防止(斥力)**: 樹同士が 180 px 以下に近づくと押し戻す力が働き、お互いにぶつからないように調整されます。
+- **成長アニメ**: 新しく植わった(または他人の樹がリアルタイムで登場した)瞬間、樹は小さく現れて 1.4 秒で通常サイズに ease-out で成長します。
+- **時間帯演出**: 画面背景が端末のローカル時刻に応じて 10 段階のキーフレームを線形補間しながら推移します。
+  - 0 時=深夜(藍色)/ 4 時=予暁 / 6 時=朝焼け / 8 時=朝 / 11〜14 時=昼 / 16 時=午後 / 18 時=夕暮れ(橙→桃) / 20 時=黄昏 / 22 時以降=夜。
+  - 1 分ごとに `state.atmo` を更新(緩やかに推移)。
+  - `ambient` オーバーレイで朝霧・夜の霞を表現。
+- **季節テーマ**: 月から春夏秋冬を判定し、薄いミストとアクセント色を重ねます。
+  - 春(3〜5 月): 桜色のミスト、若葉色。
+  - 夏(6〜8 月): 深緑のミスト、若草色。
+  - 秋(9〜11 月): 橙のミスト、紅葉色。
+  - 冬(12〜2 月): 薄水色のミスト、枯葉色。
+
+#### 開発者向け(内部仕様)
+
+- `LiveForest` クラス(`js/liveforest.js`): `requestAnimationFrame` ループ。`document.visibilityState !== 'visible'` ならスキップして CPU 節約。
+- ゆらぎ実装: `windX = sin(t*0.55 + pX)*2.4 + sin(t*0.23 + pX*1.7)*1.0` / `windY = cos(t*0.47 + pY)*2.0 + cos(t*0.19 + pY*1.3)*0.9`。`seed` を `(seed % 1009) * 0.01` で位相化。
+- 引力: similarPairs(類似度 0.08 超のペア)について `targetDist = 400 - strength * 200`、差分を `(dist - target) * 0.02 * strength` で押し引き。
+- 斥力: 全ペア走査、180 px 以内で `push = (180 - d) * 0.05 / d`。
+- drift のダンピング: 毎フレーム `*= 0.995`、最大 ±260 px。
+- 類似度算出: `treeSim(a, b)`(`liveforest.js`): 完全一致 1.0、部分一致 0.5、日本語文字の 50% 以上共有で 0.3 の重み付けで overlap を計算し、`overlap / max(|ka|,|kb|)`。
+- 最終表示位置: `t._displayX = t.x + t._driftX + t._windX`(同様に Y)。描画と hit test の両方でこれを使用。
+- 成長アニメ: `spawnAt` マップに `performance.now()` を記録、経過時間と ease-out cubic で `_spawnScale = 0.25 + (1 - (1-p)^3) * 0.75`。
+- 時間帯: `js/atmosphere.js > atmosphereAt(date)` が KEYFRAMES を 2 点で補間し `{top, bot, ambient, tone, hour, season, seasonName, seasonMist, seasonLeaf, seasonBloom}` を返す。
+- 季節判定: `seasonOf(date)` の単純な月マッチ。
+- 背景描画(`js/forest.js > render()`): 縦方向のグラデ → ambient レイヤ → seasonMist レイヤの三層重ね。
+
+---
+
+### 2.7 タイムラプス
+
+#### 一般ユーザー向け
+
+- **タイムラプス起動**: 森に樹が植わっていれば、左パネル idle 状態の「タイムラプスで振り返る」ボタン、または起動後に画面下中央のコントロールバーから操作可能。
+- **スライダーで時刻ジャンプ**: 0〜1000 段階のスライダーで、森のすべての樹・ノードの最古〜最新 `created_at` 範囲を自由に行き来。
+- **自動再生**: 「▶」ボタンで 80ms ごとに 0.8%ずつ自動進行(約 10 秒で 0→100%)、一時停止(⏸)・最後まで到達で自動停止。
+- **日付表示**: 現在カーソル位置の「4月18日 14:32」のような日時を表示。
+- **表示フィルタ**: カーソル時刻より後に生まれた樹・ノードは非表示、それより前のものだけ描画されます。
+- **閉じる**: 「×」ボタンで通常表示へ戻ります。
+
+#### 開発者向け(内部仕様)
+
+- `app.js > startTimelapse / stopTimelapse` でコントロールバーの表示切替。
+- 時間幅の算出: すべての tree・node の `created_at` を `Date.parse` して min/max を取得、幅が 0 なら toast で「時間の幅が足りません」。
+- 描画フィルタ: `state.timeCursor` が設定されていると `forest.js > render()` 内で `(t.created_at > cursor) は skip / t.nodes を created_at <= cursor でフィルタ` した shallow copy の tree を描画。
+- 自動再生は `setInterval(..., 80ms)`、`tlSlider.value += 8`(最大 1000)。
+
+---
+
+### 2.8 リアルタイム同期
+
+#### 一般ユーザー向け
+
+- **他の人の変更が数秒以内に反映**: 誰かが新しい樹を植える、キーワードを追加・編集・削除・移動すると、画面は 500ms のデバウンスを挟みつつ自動的に再読み込みされ、その場に反映されます(ページリロード不要)。
+- **新しい樹の成長アニメ**: 他の人がリアルタイムで植えた樹も成長アニメで現れます。
+- **接続状態バナー**: 画面上部に現在の接続状態を小さく表示。
+  - 通常時は非表示(online)。
+  - ネットワーク切断時: 朱色の「オフラインです」。
+  - リアルタイム再接続中: 金色の「再接続中…」。
+  - リアルタイム同期停止: 金色の「リアルタイム同期が止まっています」。
+- **自動再接続**: 接続が切れても指数バックオフ(2 秒 → 最大 20 秒)で再接続を試みます。
+
+#### 開発者向け(内部仕様)
+
+- `js/realtime.js > subscribeRoom(roomId, treeIdsRef, onChange, onStatus)` が Supabase Realtime の Broadcast channel(`room:<room_id>`)を購読。
+- 購読イベント: `tree_change` / `node_change`(`supabase/migrations/006_broadcast.sql` の `notify_tree_change` / `notify_node_change` triggers → `realtime.send(..., private=false)`)。
+- `postgres_changes` 方式ではなく **Broadcast 方式を採用**(replication slot の問題回避)。
+- 再接続: `status === 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT'` を検知して `scheduleReconnect()`、`retryMs *= 1.6`(最大 20s)。
+- データ反映: `onChange` → `debounce(500ms)` → `reload()` → 選択中 selection の存続確認 → `live.notifyDataChanged()` → 再描画。
+- Realtime 認証: `supabase.realtime.setAuth(anonKey)` を `realtimeReady` promise で事前に済ませ、`TIMED_OUT` を回避(`js/supabase.js`)。
+- `eventsPerSecond: 10` で rate limit。
+- online/offline は `navigator.onLine` と `online/offline` イベントで監視し、`setConnectionStatus` を呼ぶ。
+
+---
+
+### 2.9 復元・再認証
+
+(2.2 と重複あり、詳細はここに集約)
+
+#### 一般ユーザー向け
+
+- **復元キー**(16 桁英数字): 植樹直後に一度だけ表示、合言葉を忘れた場合の保険。
+- **合言葉**(4〜10 桁): 通常の編集用合言葉、本人が覚える。
+- **復元の使い分け**:
+  - 同じブラウザで戻った → 自動で edit token が復元(localStorage)。
+  - 別端末・別ブラウザ → ヘッダの「⚘」で名前+合言葉 or 復元キーを入力し、edit token を再発行。
+  - 合言葉を忘れた → 同じく「⚘」で名前+復元キーを入力。
+- **失敗時の扱い**: 存在しない名前・合言葉ミスマッチ時はトーストでエラー表示、編集権限は付与されない。
+
+#### 開発者向け(内部仕様)
+
+- 復元フロー: `editor.js > openRestoreModal` → 同じ森内で `state.trees` から同名 tree を探索 → `api.authTree(treeId, secret)` で JWT 取得 → `saveSession()` で localStorage へ保存 → `onRestored` コールバックで state 反映。
+- `auth_tree` は `passcode_hash` と `recovery_key_hash` のどちらに一致してもトークン発行。
+- セッションキー: `mori.session.<slug>`、値は `{treeId, editToken, treeName}` の JSON。
+- JWT の期限チェック: `auth.js > isTokenExpired()` で `payload.exp * 1000 < Date.now()` を検査、期限切れなら自動 clear。
+
+---
+
+### 2.10 主催者向け(CSV 書き出し)
+
+#### 一般ユーザー向け
+
+- **CSV エクスポート**: idle 状態の左パネルに「主催者向け」セクションがあり、「森をCSVで書き出す」ボタンで全樹・全ノードを CSV ダウンロード(UTF-8 + BOM)。
+- **出力フォーマット**:
+  - 列: `tree_name, created_at, keyword, size, color, description, parent_keyword`
+  - 樹にノードが 1 つもない場合は空行で 1 行。
+  - 孫ノードは `parent_keyword` 列に親キーワードのテキストが入ります。
+- **ファイル名**: `forest-<slug>.csv`
+- **用途**: 授業後の振り返り、Excel での集計、AI 分析の入力など。
+
+#### 開発者向け(内部仕様)
+
+- `editor.js > exportForestCsv(state)`: `state.trees` を走査して rows 配列を組み立て、CSV エスケープ(`/[",\n]/` を検出して `"..."` で括り `""` に置換)。
+- Blob(`type: 'text/csv;charset=utf-8'`)→ `URL.createObjectURL` → `<a download>` → 即 click → 5 秒後に `URL.revokeObjectURL`。
+- 成功時 `showToast('CSVをダウンロードしました', 'success')`、失敗時は `showError`。
+
+---
+
+### 2.11 エラー表示・接続状態・モバイル対応
+
+#### 一般ユーザー向け
+
+- **トースト通知**:
+  - 情報: 黒背景、3 秒で自動消去。
+  - 成功: 苔色背景、2.5 秒。
+  - エラー: 朱色背景、5 秒。
+- **接続状態バナー**(画面上部固定): `オフラインです` / `再接続中…` / `リアルタイム同期が止まっています`。
+- **モバイル最適化**:
+  - `@media (max-width: 640px)`: 左パネルが下部ドロワー(高さ 50vh)に切り替わり、森キャンバスは上半分に。
+  - タップターゲットが 40px 以上(`.ip-kw`, `.ip-sub-item`, `.ip-near-list li`)。
+  - 色パレットのボタンは 30×30 px(タップしやすく)。
+  - ヘッダの `↗` / `⚘` アイコンボタンは 38×38 px。
+  - `env(safe-area-inset-*)` で iPhone のノッチ対応。
+  - `maximum-scale=1.0, user-scalable=no` でブラウザズームを無効化、独自のピンチズーム(キャンバス内)のみ許可。
+
+#### 開発者向け(内部仕様)
+
+- `js/toast.js > showToast(message, type, {duration})` / `showError(err, fallback)`。
+- `.toast-container` は fixed bottom、`safe-area-inset-bottom` オフセット、重ね表示(縦に積む)。
+- トーストは `requestAnimationFrame` で `.show` クラス付与 → opacity/transform 遷移、自動消去時に逆。
+- `setConnectionStatus(status)` は status を `online | offline | reconnecting | realtime-down` で受け、`#connection-status` の文言とクラスを切替。
+
+---
+
+## 3. 画面一覧
+
+### 3.1 トップ画面(`index.html` / `/`)
+
+和紙背景の中央レイアウト、放射状グラデで苔色と金色がほのかに差し込むデザイン。
+
+| 要素 | 説明 |
+|---|---|
+| `h1.title-mark` | 大きな「森」の明朝体タイトル |
+| `.subtitle` | 「ひとりが一本の樹になり、みんなでひとつの森をそだてる。」 |
+| `#create-form` | 森の名前(40 字以内)、URL(slug、自動候補付き、3〜40 字)の入力フォーム |
+| 「森をつくる」ボタン | `.btn-primary`(苔色)|
+| `#created`(作成後) | 発行 URL をコード表示+「URLをコピー」「森に入る →」ボタン |
+| `#error` | バリデーション/サーバエラー表示(朱色背景)|
+
+**遷移**: 作成成功 → 同画面で URL 表示 →「森に入る」で `/r/<slug>`(= `room.html`)へ。
+
+---
+
+### 3.2 森画面(`room.html` / `/r/:slug`)
+
+`body.page-room` クラス。全画面をオーバーフロー禁止にして Canvas を敷き、左側常駐パネルと上下ヘッダ/フッタでオーバーレイ。
+
+| ゾーン | 要素 | 説明 |
+|---|---|---|
+| 左パネル `#info-panel` | `#info-content` | idle / 自分の樹 / 他人の樹 / 自分のノード / 他人のノード の 5 モード切替(`editor.js > renderInfoPanel`)|
+| ヘッダ `.room-header` | `#forest-name` | 森の名前 |
+|  | `#forest-count` | 「0本の樹」カウンタ |
+|  | `#share-btn`(↗) | 共有モーダルを開く |
+|  | `#restore-btn`(⚘) | 復元モーダルを開く |
+| キャンバス | `#forest-canvas` | 森の全景、pan/zoom/drag/タップ |
+| フッタ `.room-footer` | `#plant-btn` | 未植樹時は「+ 樹を植える」(黒)、植樹済みは「自分の樹」(金色) |
+| タイムラプスバー `#timelapse-bar` | `#tl-play / #tl-slider / #tl-label / #tl-close` | 画面下中央(フッタ上)のコントロール |
+
+#### 左パネルの 5 モード
+
+1. **idle**(未選択)
+   - 森の名前、樹の本数、説明文
+   - 「+ 樹を植える」または「自分の樹」ボタン
+   - 「別の人として入り直す」リンク(セッション時のみ)
+   - 「森の物語 — タイムラプスで振り返る」
+   - 「主催者向け — 森をCSVで書き出す」
+
+2. **自分の樹を選択**
+   - 「自分の樹」バッジ(金色)、名前、キーワード数
+   - 「キーワードを増やす」入力欄+「＋」
+   - トップレベルキーワード一覧(下に孫があれば点線付きサブリスト)
+
+3. **他人の樹を選択**
+   - 樹の名前、キーワード数、植樹日
+   - キーワード一覧(閲覧のみ、説明があれば展開)
+   - 「あなたとの共通キーワード」(金色チップ)
+   - 「近くにいる樹」(距離ソート、類似度%表示)
+   - 「散歩 — 近くの樹へ進む」ボタン
+
+4. **自分のノードを編集**
+   - 「自分のキーワード」バッジ
+   - 本文入力欄、サイズ行(XS〜XL)、色行(10 色)、説明 textarea(300 字)
+   - 削除 / 保存ボタン
+   - 「子のキーワード(孫ノード)」入力欄+既存孫の一覧
+
+5. **他人のノードを閲覧**
+   - 大きな色丸+キーワード名
+   - 説明ボックス(あれば)、または「(説明なし)」
+   - 「関連するキーワード」(孫ノード)
+
+#### モーダル
+
+- `#plant-modal`: 名前 / 合言葉 / 合言葉(確認) / メール(任意)
+- `#share-modal`: URL コード表示 + QR 画像 + コピー/閉じるボタン
+- `#restore-modal`: 名前 + 合言葉 or 復元キー
+- `#recovery-modal`: 発行された復元キー(植樹直後のみ)、コピー/保存したボタン
+
+---
+
+## 4. データモデル概略
+
+### 4.1 テーブル
+
+#### `public.rooms`
+| フィールド | 型 | 役割 |
+|---|---|---|
+| `id` | `uuid` PK | ルーム UUID、Realtime チャンネル `room:<id>` のキー |
+| `slug` | `text UNIQUE` | 招待 URL の `/r/:slug` 部分、3〜40 字 `[a-z0-9-]` |
+| `name` | `text` | 森の表示名 |
+| `created_at` | `timestamptz` | 作成日時 |
+
+#### `public.trees`
+| フィールド | 型 | 役割 |
+|---|---|---|
+| `id` | `uuid` PK | 樹 UUID |
+| `room_id` | `uuid FK(rooms)` | 所属森 |
+| `name` | `text` | 表示名(幹に刻まれる)。`(room_id, name)` は unique(一人一樹) |
+| `passcode_hash` | `text` | 合言葉の bcrypt ハッシュ |
+| `recovery_key_hash` | `text` | 復元キーの bcrypt ハッシュ |
+| `recovery_email` | `text`(nullable) | 任意のメールアドレス(現在は記録のみ、復元導線は未実装)|
+| `seed` | `bigint` | `hashtext(name + recovery_key)` 由来、ゆらぎ位相と樹形のシード |
+| `x, y` | `numeric` | 森空間での位置(ドラッグで更新、DB 保存) |
+| `created_at`, `updated_at` | `timestamptz` | |
+
+#### `public.nodes`
+| フィールド | 型 | 役割 |
+|---|---|---|
+| `id` | `uuid` PK | ノード UUID |
+| `tree_id` | `uuid FK(trees)` | 所属樹(cascade) |
+| `parent_id` | `uuid FK(nodes)` | 親ノード(孫構造用、cascade) |
+| `text` | `text` | キーワード本文(〜20 字想定、DB では制限なし) |
+| `size` | `smallint 1〜5` | `check (size between 1 and 5)` |
+| `color` | `text` | HEX カラー |
+| `ord` | `smallint` | 同じ親の下での表示順 |
+| `description` | `text`(nullable) | 説明(300 字) |
+| `offset_x, offset_y` | `numeric`(nullable) | 親からの相対位置。null なら seed ベースの自動配置 |
+| `created_at` | `timestamptz` | タイムラプスで使用 |
+
+#### `public._config`(シークレット格納)
+| フィールド | 型 | 役割 |
+|---|---|---|
+| `key` | `text` PK | 例: `jwt_secret` |
+| `value` | `text` | HS256 署名鍵など |
+
+RLS 有効で policy なし → anon / authenticated からは完全に不可視。`security definer` 関数(`sign_edit_token` / `verify_edit_token`)のみアクセス可能。
+
+### 4.2 RPC(すべて `security definer`、`search_path = public, pg_temp`)
+
+| 関数 | 引数 | 返り値 | 役割 |
+|---|---|---|---|
+| `create_room` | `p_slug, p_name` | `rooms` row | 新しい森の作成 |
+| `create_tree` | `p_room_slug, p_name, p_passcode, p_email` | `{tree_id, recovery_key}` | 新しい樹の植樹 |
+| `auth_tree` | `p_tree_id, p_secret` | `edit_token(JWT)` | 合言葉 or 復元キーで再認証 |
+| `plant_or_login` | `p_room_slug, p_name, p_passcode, p_email` | `{kind:'login'\|'planted', tree_id, edit_token, recovery_key?}` | 植樹+ログインの統合 |
+| `upsert_node` | `p_edit_token, p_tree_id, p_id?, p_text, p_size, p_color, p_ord, p_description?, p_offset_x?, p_offset_y?, p_parent_id?` | `nodes` row | ノード追加/編集 |
+| `clear_node_field` | `p_edit_token, p_node_id, p_field in ('description','offset')` | `nodes` row | 説明またはオフセットを明示的に NULL 化 |
+| `delete_node` | `p_edit_token, p_node_id` | `void` | ノード削除(孫も cascade) |
+| `update_tree_position` | `p_edit_token, p_tree_id, p_x, p_y` | `void` | 樹の移動を保存 |
+| `sign_edit_token` / `verify_edit_token` | — | — | 内部(JWT 発行・検証) |
+
+### 4.3 Realtime(broadcast)
+
+- Publication: `supabase_realtime` に `rooms`, `trees`, `nodes` を追加(`004_realtime.sql`)。
+- Replica identity: `rooms / trees / nodes` を `full` に(UPDATE で旧値も取得可能)(`005_realtime_replica.sql`)。
+- トリガ関数 `notify_tree_change` / `notify_node_change`(`006_broadcast.sql`)が INSERT/UPDATE/DELETE で `realtime.send({op, tree_id, ...}, 'tree_change'|'node_change', 'room:'||room_id, false)` を呼ぶ。
+- `realtime.messages` の SELECT policy(`allow_public_broadcast_read`)で anon も受信可。
+
+---
+
+## 5. 対応済みのセキュリティ対策
+
+### 5.1 合言葉・復元キー
+
+- 合言葉(passcode)は 4〜10 桁、ユーザー入力。
+- 復元キー(recovery_key)は `extensions.gen_random_bytes(8)` → hex 16 桁、サーバ生成。
+- 両方とも `extensions.crypt(secret, gen_salt('bf'))` で bcrypt ハッシュ化して保存。平文は DB に残らない。
+- 検証は `v.passcode_hash = extensions.crypt(input, v.passcode_hash)`(bcrypt の salt 再利用パターン)。
+
+### 5.2 JWT(edit_token)
+
+- アルゴリズム: HS256。
+- ペイロード: `{tree_id, exp}`、`exp = now + 7日`。
+- 署名鍵: `public._config.value WHERE key='jwt_secret'`。クライアントからは RLS policy 未定義により完全に読み取れない。
+- 発行は `sign_edit_token(tree_id)`、検証は `verify_edit_token(token)` → `tree_id uuid` を返す。
+- すべての書き込み RPC は冒頭で `verify_edit_token` を呼び、トークンが指す `tree_id` とパラメータ `p_tree_id` の一致を確認。
+
+### 5.3 RLS(Row Level Security)
+
+- `rooms / trees / nodes` は SELECT 公開(`public read *`)、INSERT/UPDATE/DELETE policy なし。つまり anon は read-only。
+- 書き込みはすべて `security definer` RPC 経由で、関数内で JWT 検証・所有権チェック。
+- `public._config` はすべての policy 未定義 → 完全遮断(security definer 関数のみが本体として実行、bypass)。
+
+### 5.4 security definer
+
+- すべての書き込み RPC が `security definer` + `set search_path = public, pg_temp` で定義されているため、関数所有者(Supabase の管理ロール)の権限で実行され、呼び出し元の anon でも書き込み可能。ただし、どの tree に書き込めるかは JWT で厳格に縛られる。
+
+### 5.5 anon key 露出
+
+- `window.SUPABASE_CONFIG.anonKey` は `index.html` / `room.html` に平文で埋め込まれる(クライアント側のため必然)。
+- 書き込み経路が `security definer` RPC + RLS に限定されているため、anon key を不正利用しても合言葉/復元キーがない限り他人の樹は編集不可能。
+- Realtime への書き込みは `realtime.send` を `security definer` トリガ内から呼ぶため、anon からは発火のみ(DB 書き込みに依存)。
+
+### 5.6 その他
+
+- `p_parent_id` が同一 tree に属するか `upsert_node` 内で検証(他の樹の孫として紛れ込む攻撃を防止)。
+- フロント側: `escapeHtml`(`utils.js`)で DOM 挿入時にテキストを HTML エスケープ。
+- Slug は `^[a-z0-9-]{3,40}$` の regex で制限。
+
+---
+
+## 6. 制約・仕様
+
+| 項目 | 制約 |
+|---|---|
+| 合言葉の桁数 | 4〜10 桁(DB 最小は 4、フロント UI 最大は 10) |
+| 復元キー | 16 桁(hex 8 bytes)、サーバ生成 |
+| JWT 有効期限 | 7 日 |
+| 名前(tree.name) | フロント UI 最大 20 字、`(room_id, name)` は unique |
+| slug | 3〜40 字、`[a-z0-9-]` |
+| 森の名前(rooms.name) | フロント UI 最大 40 字 |
+| キーワード本文(nodes.text) | フロント UI 最大 20 字 |
+| キーワード説明(nodes.description) | 最大 300 字 |
+| ノードサイズ | 1〜5(XS/S/M/L/XL) |
+| 色パレット | 10 色固定(任意 HEX 入力 UI はなし) |
+| 孫ノード | 2 階層まで(構造上は再帰可能だが UI が 2 階層のみ) |
+| タップ/ドラッグ境界 | 6 px(累積移動量)|
+| ズーム範囲 | 0.25〜3.5 倍(ピンチ)、0.3〜3 倍(ホイール) |
+| 斥力の最小距離 | 180 px |
+| 引力の目標距離 | 200〜400 px(類似度で変動) |
+| drift 最大値 | ±260 px |
+| 成長アニメ時間 | 1400 ms(ease-out cubic)|
+| Realtime デバウンス | 500 ms |
+| Realtime 再接続 | 2s → 最大 20s(×1.6)|
+| 時間帯更新 | 60,000 ms ごと |
+| タイムラプス自動再生 | 80 ms ごとに 0.8% 進行 |
+| Toast 表示時間 | info 3s / success 2.5s / error 5s |
+
+---
+
+## 7. 既知の制約・未実装
+
+### 7.1 関連性の判定
+
+- **キーワード類似度は文字列ベース**: 完全一致・部分一致(包含)・日本語文字の Jaccard のみ。意味的に近いキーワード(例: 「ピアノ」と「音楽」、「北海道」と「札幌」)は拾えない。
+- **AI 埋め込み未対応**: OpenAI `text-embedding-3-small` などのベクトル化 + コサイン類似度はロードマップ上のみで未実装。導入する場合は Supabase Edge Function 経由で OpenAI キーを秘匿する構成を想定。
+
+### 7.2 認証・復元導線
+
+- **メール復元未実装**: `trees.recovery_email` は記録されるだけで、magic link 送信や合言葉リセットの導線はなし。
+- **主催者識別がない**: 森作成者と他の参加者を区別する仕組みがなく、任意の参加者が CSV エクスポートを実行できる(左パネルのボタンは全員に表示)。
+- **主催者ダッシュボード未実装**: 合言葉リセット承認 UI や、樹の強制削除などの管理機能はない。
+
+### 7.3 UI・アクセシビリティ
+
+- **キーボード操作非対応**: キャンバスは完全にマウス/タッチ前提。Tab でノード選択などは不可。
+- **スクリーンリーダー対応未整備**: `aria-label` は最小限、画面読み上げでの森体験は考慮されていない。
+- **色パレット固定**: 任意の色や画像の使用はできない。
+- **カテゴリー(根/枝葉/若枝)の表現**: 当初構想の「ルーツ・過去/いま・興味/これから」のカテゴリー分けは UI 上廃止され、現在はフラットなキーワードリスト + 孫ノードのみ。
+
+### 7.4 運用・スケール
+
+- **樹の数の上限なし(想定 20 本程度)**: 引力・斥力シミュレーションは全ペア走査なので O(N²)。数百本の森では重くなる可能性。
+- **QR コード生成は外部依存**: `api.qrserver.com` への依存があり、API が止まると QR が表示されない。
+- **ビルドツールなし**: `importmap` / `esm.sh` 経由で Supabase SDK を直接取得しているため、オフライン環境や CDN 障害時にダウンロード失敗のリスク。
+- **`window.SUPABASE_CONFIG` がハードコード**: 環境分離(本番/ステージング)は HTML 差し替えで対応する必要あり。
+
+### 7.5 観察されるが扱わない機能
+
+- **カテゴリー色の自動振り分け**: パレット 10 色からデフォルトは `#5a6b3e` 苔色、ユーザーが選ぶまで変わらない。
+- **関連線(金色の光)の表示**: 初期プロトタイプ(`mori.html`)にはあったが現行 `room.html` 系では未実装(引力シミュレーションで近づけることで代替)。
+- **力学シミュレーションの D3.js 版**: README の Phase 3 に記載があるが、現行は自作軽量版(`liveforest.js`)のみ。
+
+---
+
+## 参考: 主なファイルマップ
+
+```
+/
+├── index.html              トップ画面(森作成フォーム)
+├── room.html               森画面(canvas + 左パネル + モーダル)
+├── css/main.css            スタイル一式(和紙+苔+樹皮+金の色系統)
+├── js/
+│   ├── app.js              画面遷移、state 管理、イベント配線、タイムラプス制御
+│   ├── supabase.js         Supabase クライアント + RPC 薄ラッパ(api オブジェクト)
+│   ├── auth.js             localStorage セッション管理、JWT 期限チェック
+│   ├── realtime.js         Broadcast 購読 + 指数バックオフ再接続 + debounce
+│   ├── liveforest.js       ゆらぎ/引力/斥力/成長アニメのシミュレーション
+│   ├── forest.js           Canvas 描画、pan/zoom、ドラッグ、ヒットテスト、背景演出
+│   ├── tree.js             樹の描画(幹+枝+葉+孫)、seed ベースの位置計算、trunk 半径
+│   ├── editor.js           左パネル全 5 モード、植樹/共有/復元/CSV モーダル、共通KW/近くの樹/散歩
+│   ├── atmosphere.js       時間帯 10 キーフレーム補間 + 季節判定
+│   ├── toast.js            トースト通知 + 接続状態バナー
+│   └── utils.js            stringHash, seededRandom, escapeHtml, isValidSlug, randomSlug
+├── supabase/migrations/
+│   ├── 000_combined.sql    001〜005 を統合した初期化スクリプト
+│   ├── 001_init.sql        rooms/trees/nodes + _config + JWT helper + 基本 RPC
+│   ├── 002_detail_drag.sql description / offset_x/y 追加、update_tree_position、clear_node_field
+│   ├── 003_nested.sql      nodes.parent_id + upsert_node に p_parent_id
+│   ├── 004_realtime.sql    supabase_realtime publication に 3 テーブル追加
+│   ├── 005_realtime_replica.sql  REPLICA IDENTITY FULL + grant select
+│   ├── 006_broadcast.sql   notify triggers(realtime.send 呼出)
+│   └── 007_plant_or_login.sql  一人一樹 unique + 統合 plant_or_login RPC
+├── vercel.json             /r/:slug → /room.html の rewrite
+└── test-*.mjs              Playwright E2E(Phase 0〜5 / 本番/ローカル)
+```

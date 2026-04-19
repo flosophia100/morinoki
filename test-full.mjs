@@ -214,16 +214,20 @@ await test('C8. back → ownTree → 元に戻る', async () => {
 // ===== Section D: ドラッグ操作 =====
 section('Section D: ドラッグ操作');
 await test('D1. 幹ドラッグで樹位置が変わる', async () => {
-  const before = await pageA.evaluate(() => {
+  // 実表示位置を取得してからドラッグ
+  const pos = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
-    return { x: t.x, y: t.y };
+    const rect = document.getElementById('forest-canvas').getBoundingClientRect();
+    return {
+      x: rect.x + s.view.ox + (t._displayX ?? t.x) * s.view.scale,
+      y: rect.y + s.view.oy + (t._displayY ?? t.y) * s.view.scale,
+      tx: t.x, ty: t.y
+    };
   });
-  const rect = await pageA.$eval('#forest-canvas', el => el.getBoundingClientRect());
-  // 樹は画面中央付近(fitForestToViewで)
-  await pageA.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  await pageA.mouse.move(pos.x, pos.y);
   await pageA.mouse.down();
-  await pageA.mouse.move(rect.x + rect.width / 2 + 100, rect.y + rect.height / 2 + 50, { steps: 10 });
+  await pageA.mouse.move(pos.x + 120, pos.y + 70, { steps: 15 });
   await pageA.mouse.up();
   await new Promise(r => setTimeout(r, 1500));
   const after = await pageA.evaluate(() => {
@@ -231,8 +235,9 @@ await test('D1. 幹ドラッグで樹位置が変わる', async () => {
     const t = s.trees.find(x => x.id === s.selfTreeId);
     return { x: t.x, y: t.y };
   });
-  if (Math.abs(after.x - before.x) < 10 && Math.abs(after.y - before.y) < 10) {
-    throw new Error(`no move: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+  const dx = after.x - pos.tx, dy = after.y - pos.ty;
+  if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
+    throw new Error(`no move: delta=(${dx.toFixed(1)}, ${dy.toFixed(1)})`);
   }
 });
 await test('D2. ホイールでズーム', async () => {
@@ -332,36 +337,42 @@ await test('G3. ログアウトでsessionがクリアされる', async () => {
 });
 await test('G4. 既存名前+違う合言葉はエラー', async () => {
   await pageA.waitForSelector('#auth-name', { timeout: 3000 });
+  await pageA.fill('#auth-name', '');
+  await pageA.fill('#auth-pass', '');
   await pageA.fill('#auth-name', 'Aさん');
   await pageA.fill('#auth-pass', '9999');
   await pageA.click('[data-action="auth-submit"]');
-  await new Promise(r => setTimeout(r, 1500));
-  const err = await pageA.$eval('#auth-error', el => !el.classList.contains('hidden'));
-  if (!err) throw new Error('no error');
+  // bcrypt + RPC に時間がかかるので余裕持って
+  await pageA.waitForFunction(() => {
+    const el = document.getElementById('auth-error');
+    return el && !el.classList.contains('hidden') && el.textContent.length > 0;
+  }, { timeout: 10000 });
 });
 
 // ===== Section I: 復元(合言葉忘れ時) =====
 section('Section I: 復元(合言葉忘れ時)');
 await test('I1. panelのauth-passに復元キーを入力して復元', async () => {
-  // エラー状態をリセット
-  await pageA.fill('#auth-pass', '');
+  // G4のエラー表示から回復。一度ページをreloadして完全に清潔な状態にする
+  await pageA.reload({ waitUntil: 'networkidle' });
+  await new Promise(r => setTimeout(r, 2500));
+  await pageA.waitForSelector('#auth-name', { timeout: 5000 });
   await pageA.fill('#auth-name', 'Aさん');
-  await pageA.fill('#auth-pass', recoveryKeyA); // 復元キーをpasscode欄に
+  await pageA.fill('#auth-pass', recoveryKeyA);
   await pageA.click('[data-action="auth-submit"]');
-  await pageA.waitForFunction(() => document.querySelector('.self-badge') !== null, { timeout: 10000 });
+  await pageA.waitForFunction(() => document.querySelector('.self-badge') !== null, { timeout: 15000 });
 });
 await test('I2. 復元モーダル(別端末用)も引き続き機能', async () => {
-  // 一旦logoutしてrestore-btnを試す
+  // idle に戻って restore-btn クリック
   await pageA.evaluate(() => document.querySelector('[data-action="to-idle"]')?.click());
-  await new Promise(r => setTimeout(r, 400));
+  await pageA.waitForSelector('[data-action="logout"]', { timeout: 3000 });
   await pageA.click('[data-action="logout"]');
-  await new Promise(r => setTimeout(r, 500));
+  await pageA.waitForSelector('#auth-name', { timeout: 5000 });
   await pageA.click('#restore-btn');
   await pageA.waitForFunction(() => !document.getElementById('restore-modal').classList.contains('hidden'), { timeout: 3000 });
   await pageA.fill('#restore-name', 'Aさん');
   await pageA.fill('#restore-secret', '1111');
   await pageA.click('#restore-submit');
-  await pageA.waitForFunction(() => document.querySelector('.self-badge') !== null, { timeout: 10000 });
+  await pageA.waitForFunction(() => document.querySelector('.self-badge') !== null, { timeout: 15000 });
 });
 
 // ===== Section F: Realtime同期 =====
@@ -376,10 +387,11 @@ await test('F1. Bが森に入るとAさんの樹が見える', async () => {
   if (!count.includes('1')) throw new Error('count: ' + count);
 });
 await test('F2. AのキーワードがBに反映(realtime)', async () => {
-  // own-tree モードにする(my-tree 経由 or 既にそこ)
+  // I2の時点で Aさん ログイン中。ownTreeモードに確実に遷移
+  await pageA.waitForSelector('.self-badge', { timeout: 10000 });
   const needNav = await pageA.$('[data-action="my-tree"]');
   if (needNav) await needNav.click();
-  await pageA.waitForSelector('#ip-add-input', { timeout: 5000 });
+  await pageA.waitForSelector('#ip-add-input', { timeout: 10000 });
   await pageA.fill('#ip-add-input', '旅行');
   await pageA.click('#ip-add-btn');
   // Bが自分の画面で「旅行」をRealtime経由で見れる
