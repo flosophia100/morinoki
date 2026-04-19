@@ -215,17 +215,17 @@ await test('C8. back → ownTree → 元に戻る', async () => {
 // ===== Section D: ドラッグ操作 =====
 section('Section D: ドラッグ操作');
 await test('D1. 幹ドラッグで樹位置が変わる', async () => {
-  // テスト中は liveforest を止めて安定させる
+  // liveforestを止め、ノードを含む全体を静止
   await pageA.evaluate(() => {
-    window.__morinoki?.live?.stop();
-    // 位置を固定
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
+    window.__morinoki?.live?.stop();
     t._windX = 0; t._windY = 0; t._driftX = 0; t._driftY = 0;
     t._displayX = t.x; t._displayY = t.y;
-    s._rafRender?.();
+    (t.nodes || []).forEach(n => { n.simDX = 0; n.simDY = 0; n.vx = 0; n.vy = 0; });
+    window.__morinoki?.forest?.render?.();
   });
-  await new Promise(r => setTimeout(r, 300));
+  await new Promise(r => setTimeout(r, 400));
   const beforeTx = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
@@ -488,57 +488,117 @@ await test('E5. 散歩ボタンで別の樹へ遷移', async () => {
   }, before, { timeout: 5000 }).catch(() => {}); // 2本だけだと遷移先がない場合あり
 });
 
-// ===== Section K: タイムラプス =====
-section('Section K: タイムラプス');
-await test('K1. idleに戻るとタイムラプスボタンあり', async () => {
-  await pageA.evaluate(() => document.querySelector('[data-action="to-idle"]')?.click());
-  await pageA.waitForSelector('[data-action="timelapse"]', { timeout: 3000 });
+// ===== Section K: タイムラプス(管理者のみ) =====
+section('Section K: タイムラプス(管理者のみ)');
+// まず admin login。別コンテキスト新ページで /a/<slug> を開く(前ページの状態を汚さない)
+const ctxAdmin = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const pageAdmin = await ctxAdmin.newPage();
+pageAdmin.on('pageerror', e => errorsA.push('admin/pageerror: ' + e.message));
+pageAdmin.on('console', m => { if (m.type() === 'error') errorsA.push('admin/err: ' + m.text()); });
+await test('K0. 管理者モード /a/:slug → admin-login フォーム', async () => {
+  const adminUrl = BASE + '/a/' + slug;
+  await pageAdmin.goto(adminUrl, { waitUntil: 'networkidle' });
+  await new Promise(r => setTimeout(r, 3000));
+  await pageAdmin.waitForSelector('[data-action="admin-login"]', { timeout: 10000 });
+});
+await test('K0b. admin passcode で admin_token 取得', async () => {
+  // 状況確認
+  const dbg = await pageAdmin.evaluate(() => ({
+    isAdminMode: window.__morinoki?.state?.isAdminMode,
+    hasAdminBtn: !!document.querySelector('[data-action="admin-login"]'),
+    hasAdminPass: !!document.getElementById('admin-pass'),
+    adminPassVisible: !!document.getElementById('admin-pass')?.offsetParent,
+    panel: document.getElementById('info-content')?.innerHTML?.slice(0, 200)
+  }));
+  log(`             [dbg] ${JSON.stringify(dbg)}`);
+  await pageAdmin.screenshot({ path: 'dbg-admin-pre.png' });
+  await pageAdmin.waitForSelector('#admin-pass', { state: 'visible', timeout: 5000 });
+  await pageAdmin.fill('#admin-pass', 'admin');
+  await pageAdmin.click('[data-action="admin-login"]');
+  await pageAdmin.waitForSelector('.admin-badge', { timeout: 15000 });
+});
+await test('K1. admin 時のみタイムラプスボタンあり', async () => {
+  await pageAdmin.waitForSelector('[data-action="timelapse"]', { timeout: 5000 });
 });
 await test('K2. タイムラプス起動でbar表示', async () => {
-  await pageA.click('[data-action="timelapse"]');
-  await pageA.waitForFunction(() => !document.getElementById('timelapse-bar').classList.contains('hidden'), { timeout: 3000 });
+  await pageAdmin.click('[data-action="timelapse"]');
+  await pageAdmin.waitForFunction(() => !document.getElementById('timelapse-bar').classList.contains('hidden'), { timeout: 3000 });
 });
 await test('K3. sliderで timeCursor が動く', async () => {
-  const before = await pageA.evaluate(() => window.__morinoki?.state?.timeCursor);
-  await pageA.evaluate(() => {
+  const before = await pageAdmin.evaluate(() => window.__morinoki?.state?.timeCursor);
+  await pageAdmin.evaluate(() => {
     const s = document.getElementById('tl-slider');
     s.value = 700; s.dispatchEvent(new Event('input'));
   });
   await new Promise(r => setTimeout(r, 300));
-  const after = await pageA.evaluate(() => window.__morinoki?.state?.timeCursor);
+  const after = await pageAdmin.evaluate(() => window.__morinoki?.state?.timeCursor);
   if (before === after) throw new Error('no change');
 });
 await test('K4. playで自動進行(500ms後に値増)', async () => {
-  await pageA.evaluate(() => { const s = document.getElementById('tl-slider'); s.value = 0; s.dispatchEvent(new Event('input')); });
-  await pageA.click('#tl-play');
+  await pageAdmin.evaluate(() => { const s = document.getElementById('tl-slider'); s.value = 0; s.dispatchEvent(new Event('input')); });
+  await pageAdmin.click('#tl-play');
   await new Promise(r => setTimeout(r, 600));
-  const v = await pageA.$eval('#tl-slider', el => Number(el.value));
+  const v = await pageAdmin.$eval('#tl-slider', el => Number(el.value));
   if (v <= 0) throw new Error('slider did not advance');
   // stop
-  await pageA.click('#tl-play');
+  await pageAdmin.click('#tl-play');
 });
 await test('K5. 閉じるで timeCursor が null', async () => {
-  await pageA.click('#tl-close');
+  await pageAdmin.click('#tl-close');
   await new Promise(r => setTimeout(r, 400));
-  const c = await pageA.evaluate(() => window.__morinoki?.state?.timeCursor);
+  const c = await pageAdmin.evaluate(() => window.__morinoki?.state?.timeCursor);
   if (c !== null && c !== undefined) throw new Error('cursor: ' + c);
 });
 
-// ===== Section L: CSV書き出し =====
-section('Section L: CSV書き出し');
-await test('L1. idleにCSVボタン', async () => {
-  await pageA.waitForSelector('[data-action="export-csv"]', { timeout: 3000 });
+// ===== Section L: CSV書き出し(管理者のみ) =====
+section('Section L: CSV書き出し(管理者のみ)');
+await test('L1. admin 時のみ CSVボタン', async () => {
+  await pageAdmin.waitForSelector('[data-action="export-csv"]', { timeout: 3000 });
 });
 await test('L2. ダウンロードイベント発火 + 正しいファイル名', async () => {
   const [download] = await Promise.all([
-    pageA.waitForEvent('download', { timeout: 5000 }),
-    pageA.click('[data-action="export-csv"]')
+    pageAdmin.waitForEvent('download', { timeout: 5000 }),
+    pageAdmin.click('[data-action="export-csv"]')
   ]);
   const name = download.suggestedFilename();
   if (!name.startsWith('forest-') || !name.endsWith('.csv')) throw new Error('filename: ' + name);
 });
 await test('L3. success toast表示', async () => {
-  await pageA.waitForSelector('.toast-success.show', { timeout: 3000 });
+  await pageAdmin.waitForSelector('.toast-success.show', { timeout: 3000 });
+});
+
+// ===== Section AX: 管理者による他人樹の編集 =====
+section('Section AX: 管理者は他人樹を編集可能');
+await test('AX1. admin で他人樹(Bさん)のノードを追加できる', async () => {
+  const hasB = await pageAdmin.evaluate(() => window.__morinoki?.state?.trees?.some(t => t.name === 'Bさん'));
+  if (!hasB) return 'skip';
+  const result = await pageAdmin.evaluate(async () => {
+    const mod = await import('/js/supabase.js');
+    const s = window.__morinoki.state;
+    const b = s.trees.find(t => t.name === 'Bさん');
+    try {
+      return { ok: await mod.api.upsertNode(s.adminToken, b.id, {
+        text: 'admin追加', size: 3, color: '#c49a3e', ord: 99
+      }) };
+    } catch (e) { return { err: e.message }; }
+  });
+  if (result.err) throw new Error(result.err);
+  if (!result.ok.text.includes('admin追加')) throw new Error('unexpected: ' + JSON.stringify(result.ok));
+});
+
+// ===== Section NX: 非管理者モードではタイムラプス/CSVボタン非表示 =====
+section('Section NX: 非admin時はタイムラプス/CSV非表示');
+await test('NX1. 通常URLに戻る + admin logout → ボタン消える', async () => {
+  // admin logout
+  const logoutBtn = await pageA.$('[data-action="admin-logout"]');
+  if (logoutBtn) await logoutBtn.click();
+  await new Promise(r => setTimeout(r, 500));
+  // 通常URL
+  await pageA.goto(forestUrl, { waitUntil: 'networkidle' });
+  await new Promise(r => setTimeout(r, 2500));
+  const hasTL = await pageA.$('[data-action="timelapse"]');
+  const hasCSV = await pageA.$('[data-action="export-csv"]');
+  if (hasTL || hasCSV) throw new Error(`visible! tl=${!!hasTL} csv=${!!hasCSV}`);
 });
 
 // ===== Section M: Toast / エラー =====
