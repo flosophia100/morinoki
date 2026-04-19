@@ -215,32 +215,42 @@ await test('C8. back → ownTree → 元に戻る', async () => {
 // ===== Section D: ドラッグ操作 =====
 section('Section D: ドラッグ操作');
 await test('D1. 幹ドラッグで樹位置が変わる', async () => {
+  // テスト中は liveforest を止めて安定させる
+  await pageA.evaluate(() => {
+    window.__morinoki?.live?.stop();
+    // 位置を固定
+    const s = window.__morinoki?.state;
+    const t = s.trees.find(x => x.id === s.selfTreeId);
+    t._windX = 0; t._windY = 0; t._driftX = 0; t._driftY = 0;
+    t._displayX = t.x; t._displayY = t.y;
+    s._rafRender?.();
+  });
+  await new Promise(r => setTimeout(r, 300));
   const beforeTx = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
     return {
       tx: t.x, ty: t.y,
-      dispX: t._displayX ?? t.x,
-      dispY: t._displayY ?? t.y,
       scale: s.view.scale,
       ox: s.view.ox, oy: s.view.oy
     };
   });
   const rect = await pageA.$eval('#forest-canvas', el => el.getBoundingClientRect());
-  const px = rect.x + beforeTx.ox + beforeTx.dispX * beforeTx.scale;
-  const py = rect.y + beforeTx.oy + beforeTx.dispY * beforeTx.scale;
-  // Playwrightの steps でスムーズに一気にドラッグ
+  const px = rect.x + beforeTx.ox + beforeTx.tx * beforeTx.scale;
+  const py = rect.y + beforeTx.oy + beforeTx.ty * beforeTx.scale;
   await pageA.mouse.move(px, py);
   await pageA.mouse.down();
-  await pageA.mouse.move(px + 180, py + 100, { steps: 20 });
+  await pageA.mouse.move(px + 200, py + 120, { steps: 25 });
   await pageA.mouse.up();
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 2500));
   const after = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
     return { x: t.x, y: t.y };
   });
   const dx = after.x - beforeTx.tx, dy = after.y - beforeTx.ty;
+  // liveforestを再開
+  await pageA.evaluate(() => window.__morinoki?.live?.start());
   if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
     throw new Error(`no move: delta=(${dx.toFixed(1)}, ${dy.toFixed(1)})`);
   }

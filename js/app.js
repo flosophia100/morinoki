@@ -360,7 +360,7 @@ async function initRoom() {
   });
 
   // テスト/デバッグ用にstateを公開
-  window.__morinoki = { state, forest };
+  window.__morinoki = { state, forest, live };
 
   async function reload() {
     const trees = await api.getTrees(state.room.id);
