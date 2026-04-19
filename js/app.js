@@ -270,6 +270,9 @@ async function initRoom() {
   // 時間帯を1分ごとに更新(1時間/24段階でゆっくり推移)
   setInterval(() => { state.atmo = atmosphereAt(); forest.render(); }, 60000);
 
+  // テスト/デバッグ用にstateを公開
+  window.__morinoki = { state, forest };
+
   async function reload() {
     const trees = await api.getTrees(state.room.id);
     const ids = trees.map(t => t.id);
