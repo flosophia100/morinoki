@@ -17,9 +17,9 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   ctx.fill();
   ctx.restore();
 
-  // --- 層 (a) 中心の詰まった短線:非常に多数、半径0〜0.4 ---
+  // --- 層 (a) 中心の詰まった短線:多数、半径0〜0.4 ---
   const rngInner = seededRandom(Math.max(1, Math.floor(seed)));
-  const Nin = Math.floor((130 + baseR * 2.2) * density);
+  const Nin = Math.floor((60 + baseR * 1.1) * density);
   for (let i = 0; i < Nin; i++) {
     const a = (Math.PI * 2 * i) / Nin + (rngInner() - 0.5) * 0.5;
     const len = baseR * (0.2 + rngInner() * 0.35);
@@ -36,7 +36,7 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
 
   // --- 層 (b) 中距離層:密、半径0.3〜0.75 ---
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
-  const Nmid = Math.floor((90 + baseR * 1.6) * density);
+  const Nmid = Math.floor((45 + baseR * 0.9) * density);
   for (let i = 0; i < Nmid; i++) {
     const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.35;
     const len = baseR * (0.45 + rngMid() * 0.35);
@@ -59,7 +59,7 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
 
   // --- 層 (c) 外へ突出する長線(ギザギザ感):少数、長さバラツキ大 ---
   const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
-  const Nout = Math.floor((40 + baseR * 0.6) * density);
+  const Nout = Math.floor((24 + baseR * 0.4) * density);
   for (let i = 0; i < Nout; i++) {
     const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
     // 長さが大きくばらつく:短いものと長く突き出すものが混在してギザギザ感

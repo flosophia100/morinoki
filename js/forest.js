@@ -241,6 +241,13 @@ export function createForest(canvas, state) {
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
     const cursor = state.timeCursor;
+    // ビューポートの world 座標範囲(culling用)
+    const invS = 1 / state.view.scale;
+    const worldLeft = -state.view.ox * invS;
+    const worldTop = -state.view.oy * invS;
+    const worldRight = worldLeft + W * invS;
+    const worldBot = worldTop + H * invS;
+    const MARGIN = 250; // 樹の半径+余裕
     (state.trees || []).forEach(t => {
       if (cursor) {
         const ct = Date.parse(t.created_at || 0);
@@ -248,6 +255,9 @@ export function createForest(canvas, state) {
       }
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
+      // 視界外はスキップ(パフォーマンス)
+      if (dx < worldLeft - MARGIN || dx > worldRight + MARGIN ||
+          dy < worldTop - MARGIN || dy > worldBot + MARGIN) return;
       const ds = t._displayScale ?? 1.0;
       const filteredTree = cursor ? { ...t, nodes: (t.nodes || []).filter(n => Date.parse(n.created_at || 0) <= cursor) } : t;
       drawTree(ctx, filteredTree, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
