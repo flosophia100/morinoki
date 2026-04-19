@@ -29,16 +29,24 @@ body.page-index {
 .create-form input:focus { border-color: var(--moss); }
 
 .btn-primary {
-  font-family: 'Shippori Mincho', serif; font-size: 1rem; padding: 0.9rem 2rem;
+  font-family: 'Shippori Mincho', serif; font-size: 1rem; padding: 0.8rem 1.6rem;
   background: var(--moss-deep); color: var(--paper); border: none;
-  letter-spacing: 0.2em; cursor: pointer; display: inline-block; text-decoration: none; text-align: center;
+  letter-spacing: 0.15em; cursor: pointer; display: inline-block; text-decoration: none; text-align: center;
 }
 .btn-primary:hover { background: var(--ink); }
 .btn-secondary {
-  font-family: 'Shippori Mincho', serif; font-size: 0.9rem; padding: 0.7rem 1.2rem;
+  font-family: 'Shippori Mincho', serif; font-size: 0.88rem; padding: 0.6rem 1.1rem;
   background: transparent; color: var(--ink-soft); border: 1px solid var(--ink-soft);
-  letter-spacing: 0.15em; cursor: pointer;
+  letter-spacing: 0.12em; cursor: pointer;
 }
+.btn-sm { padding: 0.45rem 0.8rem; font-size: 0.88rem; }
+.btn-ink { background: var(--ink); color: var(--paper); border: none; cursor: pointer; font-family: 'Shippori Mincho',serif; }
+.btn-link { background: none; border: none; color: var(--ink-soft); text-decoration: underline; cursor: pointer; font-family: 'Klee One',serif; font-size: 0.82rem; padding: 0.3rem 0; }
+.btn-danger {
+  padding: 0.5rem 0.9rem; font-family: 'Shippori Mincho',serif; font-size: 0.85rem;
+  background: transparent; color: var(--bud); border: 1px solid var(--bud); cursor: pointer;
+}
+.w-full { width: 100%; }
 
 .created { margin-top: 1.5rem; padding: 1rem; background: rgba(255,252,244,0.9); border: 1px solid rgba(90,107,62,0.2); }
 .created code { display: block; margin: 0.5rem 0 1rem; padding: 0.5rem; background: var(--paper-dark); font-family: 'Klee One', monospace; word-break: break-all; font-size: 0.85rem; }
@@ -47,10 +55,80 @@ body.page-index {
 .error { margin-top: 1rem; padding: 0.7rem; color: var(--bud); background: rgba(212,105,74,0.08); border: 1px solid var(--bud); font-size: 0.88rem; }
 .hidden { display: none !important; }
 
-/* === Room画面 === */
+/* === Room 画面 === */
 body.page-room { overflow: hidden; background: #ede3cf; }
+
+/* 左常駐パネル */
+.info-panel {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 320px; z-index: 15;
+  background: linear-gradient(180deg, rgba(244,237,224,0.96) 0%, rgba(237,227,207,0.96) 100%);
+  border-right: 1px solid rgba(90,107,62,0.25);
+  box-shadow: 2px 0 12px rgba(31,26,21,0.06);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.info-content { overflow-y: auto; padding: 0; height: 100%; }
+.ip-block { padding: 0.9rem 1.1rem; border-bottom: 1px solid rgba(74,63,50,0.1); display: flex; flex-direction: column; gap: 0.5rem; }
+.ip-block:last-child { border-bottom: none; }
+.ip-title { font-size: 1.25rem; color: var(--moss-deep); letter-spacing: 0.12em; }
+.ip-head { display: flex; flex-direction: column; gap: 0.2rem; }
+.ip-hint { font-family: 'Klee One', serif; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.6; }
+.ip-desc { font-size: 0.88rem; color: var(--ink); line-height: 1.7; margin-bottom: 0.5rem; }
+.ip-back-link { font-size: 0.82rem; }
+.ip-actions { display: flex; gap: 0.5rem; justify-content: space-between; margin-top: 0.4rem; }
+.ip-row { display: flex; gap: 0.3rem; }
+.ip-row input[type="text"] { flex: 1; padding: 0.55rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.92rem; border: 1px solid rgba(74,63,50,0.25); background: white; outline: none; }
+.ip-row input:focus { border-color: var(--moss); }
+.mini-label { font-family: 'Klee One',serif; font-size: 0.72rem; color: var(--ink-soft); letter-spacing: 0.08em; }
+.self-badge {
+  display: inline-block; font-family: 'Klee One',serif; font-size: 0.72rem;
+  background: var(--gold); color: var(--paper); padding: 0.15rem 0.5rem;
+  letter-spacing: 0.15em; margin-bottom: 0.3rem;
+}
+
+.size-row { display: flex; gap: 0.2rem; }
+.size-row button { flex: 1; padding: 0.45rem 0; font-family: 'Klee One',serif; font-size: 0.78rem; background: transparent; border: 1px solid rgba(74,63,50,0.2); cursor: pointer; }
+.size-row button.on { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+
+.color-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.color-row button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; }
+.color-row button.on { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+.ip-block textarea {
+  padding: 0.5rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.9rem; line-height: 1.5;
+  border: 1px solid rgba(74,63,50,0.25); outline: none; background: white; resize: vertical; min-height: 4rem;
+}
+.ip-block input[type="text"] {
+  padding: 0.55rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.95rem;
+  border: 1px solid rgba(74,63,50,0.25); background: white; outline: none;
+}
+.ip-block input:focus, .ip-block textarea:focus { border-color: var(--moss); }
+
+.ip-kw-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.ip-kw { background: rgba(255,252,244,0.7); padding: 0.5rem 0.6rem; cursor: pointer; border: 1px solid rgba(74,63,50,0.1); }
+.ip-kw:hover { border-color: rgba(90,107,62,0.3); }
+.ip-kw-row { display: flex; align-items: center; gap: 0.45rem; font-family: 'Klee One',serif; font-size: 0.9rem; }
+.ip-kw-row .dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+.ip-kw-row .kw { flex: 1; }
+.ip-kw-row .desc-mark { color: var(--gold); font-weight: 700; font-size: 0.95rem; letter-spacing: 0; }
+.ip-kw-desc { margin-top: 0.25rem; padding: 0.35rem 0.45rem 0.25rem 1.3rem; font-family: 'Klee One',serif; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.55; white-space: pre-wrap; }
+
+.ip-sub { list-style: none; margin: 0.35rem 0 0 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; border-left: 1px dashed rgba(90,107,62,0.3); padding-left: 0.5rem; }
+.ip-sub-item { display: flex; align-items: center; gap: 0.35rem; font-family: 'Klee One',serif; font-size: 0.82rem; cursor: pointer; padding: 0.15rem 0; }
+.ip-sub-item:hover { color: var(--moss-deep); }
+.ip-sub-item .dot-sm, .dot-sm { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.ip-sub-list { list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+.ip-sub-list li { padding: 0.4rem 0.5rem; background: rgba(255,252,244,0.5); cursor: pointer; display: flex; align-items: center; gap: 0.4rem; font-family: 'Klee One',serif; font-size: 0.85rem; border: 1px solid rgba(74,63,50,0.08); }
+.ip-sub-list li:hover { border-color: rgba(90,107,62,0.3); }
+
+.ip-kw-head { display: flex; align-items: center; gap: 0.6rem; }
+.dot-lg { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15); }
+
+.ip-desc-box { padding: 0.7rem 0.9rem; background: rgba(255,252,244,0.7); border-left: 3px solid var(--moss); font-size: 0.9rem; line-height: 1.7; white-space: pre-wrap; font-family: 'Klee One', serif; }
+
+/* Header / Footer */
 .room-header, .room-footer {
-  position: fixed; left: 0; right: 0; z-index: 10;
+  position: fixed; left: 320px; right: 0; z-index: 10;
   display: flex; justify-content: space-between; align-items: center;
   padding: 0.9rem 1.1rem; pointer-events: none;
 }
@@ -63,14 +141,16 @@ body.page-room { overflow: hidden; background: #ede3cf; }
   padding: 0.7rem 1.4rem; font-family: 'Shippori Mincho', serif; font-size: 0.9rem;
   background: var(--ink); color: var(--paper); border: none; cursor: pointer; letter-spacing: 0.15em;
 }
+.btn-plant[data-mode="self"] { background: var(--gold); }
 
-.forest-container { position: fixed; inset: 0; overflow: hidden; z-index: 1; }
+.forest-container { position: fixed; inset: 0 0 0 320px; overflow: hidden; z-index: 1; }
 #forest-canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 #forest-canvas:active { cursor: grabbing; }
 
+/* フローティングモーダル(植樹・復元キー) */
 .modal {
   position: fixed; inset: 0; background: rgba(31,26,21,0.55);
-  display: flex; align-items: center; justify-content: center; z-index: 20; padding: 1rem;
+  display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem;
 }
 .modal-panel {
   background: var(--paper); padding: 1.5rem 1.3rem;
@@ -84,53 +164,10 @@ body.page-room { overflow: hidden; background: #ede3cf; }
 .modal-panel .hint { font-family: 'Klee One',serif; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.6; }
 .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 0.3rem; }
 
-.node-panel {
-  position: fixed; right: 1rem; top: 4rem; width: 260px; max-height: 60vh;
-  background: var(--paper); border: 1px solid rgba(90,107,62,0.25); z-index: 15;
-  display: flex; flex-direction: column; overflow: hidden;
+/* モバイル: 左パネルを下部ドロワー化 */
+@media (max-width: 640px) {
+  .info-panel { left: 0; right: 0; top: auto; bottom: 0; width: 100%; height: 45%; border-right: none; border-top: 1px solid rgba(90,107,62,0.25); box-shadow: 0 -2px 12px rgba(31,26,21,0.08); }
+  .forest-container { inset: 0 0 45% 0; }
+  .room-header { left: 0; }
+  .room-footer { left: 0; bottom: 45%; }
 }
-.node-panel header { display: flex; justify-content: space-between; align-items: center; padding: 0.6rem 0.8rem; border-bottom: 1px solid rgba(74,63,50,0.15); }
-.node-panel header span { font-size: 0.95rem; color: var(--moss-deep); letter-spacing: 0.1em; }
-.node-panel header button { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--ink-soft); }
-.node-add { display: flex; gap: 0.3rem; padding: 0.6rem 0.8rem; }
-.node-add input { flex: 1; padding: 0.5rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.9rem; border: 1px solid rgba(74,63,50,0.25); outline: none; }
-.node-add button { padding: 0.5rem 0.8rem; background: var(--ink); color: var(--paper); border: none; cursor: pointer; font-size: 1rem; }
-.node-panel ul { list-style: none; overflow-y: auto; padding: 0 0.8rem 0.8rem; }
-.node-panel li { padding: 0.4rem 0.5rem; margin-top: 0.3rem; background: rgba(255,255,255,0.7); display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-family: 'Klee One',serif; font-size: 0.88rem; }
-.node-panel li .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-.node-edit {
-  position: fixed; background: var(--paper); padding: 0.9rem; border: 1px solid rgba(74,63,50,0.2);
-  z-index: 25; min-width: 260px; max-width: 320px; display: flex; flex-direction: column; gap: 0.4rem;
-  box-shadow: 0 6px 24px rgba(31,26,21,0.15);
-}
-.mini-label { font-family: 'Klee One',serif; font-size: 0.72rem; color: var(--ink-soft); letter-spacing: 0.08em; margin-top: 0.25rem; }
-.node-edit input,
-.node-edit textarea { padding: 0.45rem 0.7rem; font-family: 'Shippori Mincho',serif; font-size: 0.92rem; border: 1px solid rgba(74,63,50,0.25); outline: none; background: white; resize: vertical; }
-.node-edit textarea { min-height: 4rem; font-size: 0.85rem; line-height: 1.5; }
-.size-row { display: flex; gap: 0.2rem; }
-.size-row button { flex: 1; padding: 0.4rem 0; font-family: 'Klee One',serif; font-size: 0.78rem; background: transparent; border: 1px solid rgba(74,63,50,0.2); cursor: pointer; }
-.size-row button.on { background: var(--moss); color: var(--paper); border-color: var(--moss); }
-.color-row { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.color-row button { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; }
-.color-row button.on { outline: 2px solid var(--gold); outline-offset: 1px; }
-.node-edit-actions { display: flex; gap: 0.4rem; justify-content: space-between; }
-.btn-danger {
-  padding: 0.5rem 0.9rem; font-family: 'Shippori Mincho',serif; font-size: 0.85rem;
-  background: transparent; color: var(--bud); border: 1px solid var(--bud); cursor: pointer;
-}
-
-/* === Node detail(他人のノード読み取り) === */
-.node-detail-head { display: flex; gap: 0.8rem; align-items: center; }
-.dot-lg { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0,0,0,0.15); }
-#node-detail-title { font-size: 1.1rem; color: var(--moss-deep); letter-spacing: 0.1em; }
-.node-detail-desc { font-family: 'Klee One', serif; font-size: 0.92rem; color: var(--ink); line-height: 1.7; white-space: pre-wrap; padding: 0.6rem 0.8rem; background: rgba(255,252,244,0.6); border-left: 3px solid var(--moss); }
-
-/* === Tree detail(他人の樹全体) === */
-.tree-detail-list { list-style: none; margin: 0.3rem 0 0; padding: 0; max-height: 45vh; overflow-y: auto; }
-.tree-detail-list li { padding: 0.5rem 0; border-bottom: 1px dashed rgba(74,63,50,0.15); display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
-.tree-detail-list li .kw { font-size: 0.95rem; color: var(--ink); }
-.tree-detail-list li .desc { flex-basis: 100%; font-family: 'Klee One', serif; font-size: 0.82rem; color: var(--ink-soft); line-height: 1.6; padding: 0.3rem 0 0 1.3rem; white-space: pre-wrap; }
-.tree-detail-list .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-
-.desc-mark { margin-left: auto; color: var(--gold); font-weight: 600; font-size: 0.9rem; }

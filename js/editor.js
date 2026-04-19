@@ -4,6 +4,7 @@ import { escapeHtml } from './utils.js';
 
 const PALETTE = ['#5a6b3e','#8b6a4a','#c49a3e','#d4694a','#6b4a2b','#3a4828','#b8c18c','#e8a298','#7d8f5a','#a87e55'];
 
+// ===== 植樹モーダル =====
 export function openPlantModal(state, onPlanted) {
   const m = document.getElementById('plant-modal');
   const err = document.getElementById('plant-error');
@@ -15,7 +16,6 @@ export function openPlantModal(state, onPlanted) {
   name.value = ''; p1.value = ''; p2.value = ''; email.value = '';
   m.classList.remove('hidden');
   name.focus();
-
   document.getElementById('plant-cancel').onclick = () => m.classList.add('hidden');
   document.getElementById('plant-submit').onclick = async () => {
     err.classList.add('hidden');
@@ -48,144 +48,325 @@ function showRecoveryModal(key, onClose) {
   document.getElementById('recovery-ok').onclick = () => { m.classList.add('hidden'); onClose && onClose(); };
 }
 
-// 自分の樹: 幹タップ → ノード一覧パネル
-export function openNodePanel(state, tree, onChange) {
-  const panel = document.getElementById('node-panel');
-  document.getElementById('node-panel-name').textContent = tree.name;
-  renderList();
-  panel.classList.remove('hidden');
+// ===== 左常駐パネル =====
+// selection: null | { kind:'tree', tree } | { kind:'node', tree, node }
+export function renderInfoPanel(state, selection, callbacks) {
+  const el = document.getElementById('info-content');
+  const isSelfTree = (tree) => !!state.session && tree.id === state.selfTreeId;
 
-  document.getElementById('node-panel-close').onclick = () => panel.classList.add('hidden');
-  document.getElementById('node-add-btn').onclick = addOne;
-  const input = document.getElementById('node-input');
-  input.value = ''; input.focus();
-  input.onkeydown = (e) => { if (e.key === 'Enter') addOne(); };
+  if (!selection) {
+    el.innerHTML = idleHTML(state);
+    wireIdle(el, state, callbacks);
+    return;
+  }
+  if (selection.kind === 'tree') {
+    if (isSelfTree(selection.tree)) {
+      el.innerHTML = ownTreeHTML(selection.tree);
+      wireOwnTree(el, state, selection.tree, callbacks);
+    } else {
+      el.innerHTML = otherTreeHTML(selection.tree);
+      wireOtherTree(el, state, selection.tree, callbacks);
+    }
+    return;
+  }
+  if (selection.kind === 'node') {
+    if (isSelfTree(selection.tree)) {
+      el.innerHTML = ownNodeHTML(selection.tree, selection.node);
+      wireOwnNode(el, state, selection.tree, selection.node, callbacks);
+    } else {
+      el.innerHTML = otherNodeHTML(selection.tree, selection.node);
+      wireOtherNode(el, state, selection.tree, selection.node, callbacks);
+    }
+  }
+}
 
+// ----- Idle -----
+function idleHTML(state) {
+  const hasSession = !!state.session;
+  return `
+    <div class="ip-block">
+      <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || '森')}</h2>
+      <p class="ip-hint">${(state.trees || []).length} 本の樹</p>
+    </div>
+    <div class="ip-block">
+      <p class="ip-desc">
+        森の中で樹・枝先のキーワードをタップすると、ここに詳細が表示されます。
+      </p>
+      ${hasSession
+        ? `<p class="ip-hint">あなたの樹があります。幹または右下「自分の樹」で詳細に戻れます。</p>
+           <button data-action="my-tree" class="btn-secondary w-full">自分の樹</button>
+           <button data-action="logout" class="btn-link">別の人として入り直す</button>`
+        : `<button data-action="plant" class="btn-primary w-full">+ 樹を植える</button>`
+      }
+    </div>
+  `;
+}
+function wireIdle(el, state, cb) {
+  el.querySelector('[data-action="plant"]')?.addEventListener('click', () => cb.onPlant && cb.onPlant());
+  el.querySelector('[data-action="my-tree"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
+  el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
+}
+
+// ----- 自分の樹(幹タップ) -----
+function ownTreeHTML(tree) {
+  const topLevel = (tree.nodes || []).filter(n => !n.parent_id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  return `
+    <div class="ip-block">
+      <p class="ip-back-link"><button data-action="to-idle" class="btn-link">← 森へ戻る</button></p>
+      <div class="ip-head">
+        <span class="self-badge">自分の樹</span>
+        <h2 class="ip-title">${escapeHtml(tree.name)}</h2>
+        <p class="ip-hint">${(tree.nodes||[]).length} 個のキーワード</p>
+      </div>
+    </div>
+    <div class="ip-block">
+      <label class="mini-label">キーワードを増やす</label>
+      <div class="ip-row">
+        <input id="ip-add-input" type="text" maxlength="20" placeholder="例: 音楽">
+        <button id="ip-add-btn" class="btn-sm btn-ink">＋</button>
+      </div>
+    </div>
+    <div class="ip-block ip-list">
+      <label class="mini-label">キーワード</label>
+      ${topLevel.length === 0
+        ? '<p class="ip-hint">まだありません</p>'
+        : `<ul class="ip-kw-list">${topLevel.map(n => kwItemHTML(tree, n)).join('')}</ul>`}
+    </div>
+  `;
+}
+function kwItemHTML(tree, node) {
+  const sub = (tree.nodes || []).filter(n => n.parent_id === node.id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  return `
+    <li class="ip-kw" data-node-id="${node.id}">
+      <div class="ip-kw-row">
+        <span class="dot" style="background:${node.color}"></span>
+        <span class="kw">${escapeHtml(node.text)}</span>
+        ${node.description ? '<span class="desc-mark" title="説明あり">…</span>' : ''}
+      </div>
+      ${sub.length ? `<ul class="ip-sub">${sub.map(s => `<li class="ip-sub-item" data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}</li>`).join('')}</ul>` : ''}
+    </li>
+  `;
+}
+function wireOwnTree(el, state, tree, cb) {
+  el.querySelector('[data-action="to-idle"]')?.addEventListener('click', () => cb.onIdle && cb.onIdle());
+  const input = el.querySelector('#ip-add-input');
+  const btn = el.querySelector('#ip-add-btn');
   async function addOne() {
     const txt = input.value.trim();
     if (!txt) return;
     try {
       const saved = await api.upsertNode(state.session.editToken, tree.id, {
-        text: txt, size: 3, color: PALETTE[0], ord: (tree.nodes||[]).length
+        text: txt, size: 3, color: PALETTE[0],
+        ord: (tree.nodes || []).filter(n => !n.parent_id).length,
+        parent_id: null
       });
       tree.nodes = tree.nodes || [];
       tree.nodes.push(saved);
       input.value = '';
-      renderList();
-      onChange && onChange();
-    } catch (e) {
-      alert('保存に失敗しました: ' + e.message);
-    }
+      cb.onRerender && cb.onRerender();
+    } catch (e) { alert('保存失敗: ' + e.message); }
   }
-
-  function renderList() {
-    const ul = document.getElementById('node-list');
-    ul.innerHTML = (tree.nodes || []).map((n, i) =>
-      `<li data-idx="${i}"><span class="dot" style="background:${n.color}"></span>${escapeHtml(n.text)}${n.description ? '<span class="desc-mark">…</span>' : ''}</li>`
-    ).join('');
-    ul.querySelectorAll('li').forEach(li => {
-      li.onclick = () => openNodeEdit(state, tree, Number(li.dataset.idx), renderList, onChange);
+  btn?.addEventListener('click', addOne);
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addOne(); });
+  el.querySelectorAll('.ip-kw').forEach(li => {
+    li.addEventListener('click', (ev) => {
+      if (ev.target.closest('.ip-sub-item')) return;
+      const nid = li.dataset.nodeId;
+      const node = tree.nodes.find(n => n.id === nid);
+      if (node && cb.onSelectNode) cb.onSelectNode(tree, node);
     });
-  }
+  });
+  el.querySelectorAll('.ip-sub-item').forEach(li => {
+    li.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const nid = li.dataset.nodeId;
+      const node = tree.nodes.find(n => n.id === nid);
+      if (node && cb.onSelectNode) cb.onSelectNode(tree, node);
+    });
+  });
 }
 
-// 自分のノードの編集ポップオーバー
-export function openNodeEdit(state, tree, idx, rerender, onChange) {
-  const n = tree.nodes[idx];
-  const box = document.getElementById('node-edit');
-  const txt = document.getElementById('node-edit-text');
-  const desc = document.getElementById('node-edit-desc');
-  txt.value = n.text;
-  desc.value = n.description || '';
-
-  box.querySelectorAll('.size-row button').forEach(b => {
-    b.classList.toggle('on', Number(b.dataset.size) === n.size);
-    b.onclick = () => {
-      box.querySelectorAll('.size-row button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on');
-    };
+// ----- 他人の樹 -----
+function otherTreeHTML(tree) {
+  const topLevel = (tree.nodes || []).filter(n => !n.parent_id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  const d = new Date(tree.createdAt || tree.created_at);
+  const dateStr = isNaN(d) ? '' : ` · ${d.getMonth()+1}月${d.getDate()}日`;
+  return `
+    <div class="ip-block">
+      <p class="ip-back-link"><button data-action="to-idle" class="btn-link">← 森へ戻る</button></p>
+      <div class="ip-head">
+        <h2 class="ip-title">${escapeHtml(tree.name)} さん</h2>
+        <p class="ip-hint">${(tree.nodes||[]).length} 個のキーワード${dateStr}</p>
+      </div>
+    </div>
+    <div class="ip-block ip-list">
+      <label class="mini-label">キーワード</label>
+      ${topLevel.length === 0
+        ? '<p class="ip-hint">まだありません</p>'
+        : `<ul class="ip-kw-list">${topLevel.map(n => kwItemReadHTML(tree, n)).join('')}</ul>`}
+    </div>
+  `;
+}
+function kwItemReadHTML(tree, node) {
+  const sub = (tree.nodes || []).filter(n => n.parent_id === node.id);
+  return `
+    <li class="ip-kw" data-node-id="${node.id}">
+      <div class="ip-kw-row">
+        <span class="dot" style="background:${node.color}"></span>
+        <span class="kw">${escapeHtml(node.text)}</span>
+        ${node.description ? '<span class="desc-mark">…</span>' : ''}
+      </div>
+      ${node.description ? `<div class="ip-kw-desc">${escapeHtml(node.description)}</div>` : ''}
+      ${sub.length ? `<ul class="ip-sub">${sub.map(s => `<li class="ip-sub-item" data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}${s.description ? '<span class="desc-mark">…</span>' : ''}</li>`).join('')}</ul>` : ''}
+    </li>
+  `;
+}
+function wireOtherTree(el, state, tree, cb) {
+  el.querySelector('[data-action="to-idle"]')?.addEventListener('click', () => cb.onIdle && cb.onIdle());
+  el.querySelectorAll('.ip-kw, .ip-sub-item').forEach(li => {
+    li.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const nid = li.dataset.nodeId;
+      const node = tree.nodes.find(n => n.id === nid);
+      if (node && cb.onSelectNode) cb.onSelectNode(tree, node);
+    });
   });
+}
 
-  const cr = document.getElementById('color-row');
-  cr.innerHTML = PALETTE.map(c => `<button data-color="${c}" style="background:${c}"></button>`).join('');
-  cr.querySelectorAll('button').forEach(b => {
-    b.classList.toggle('on', b.dataset.color === n.color);
-    b.onclick = () => {
-      cr.querySelectorAll('button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on');
-    };
-  });
+// ----- 自分のノード(編集) -----
+function ownNodeHTML(tree, node) {
+  const subs = (tree.nodes || []).filter(n => n.parent_id === node.id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  return `
+    <div class="ip-block">
+      <p class="ip-back-link"><button data-action="back" class="btn-link">← ${escapeHtml(tree.name)}の樹</button></p>
+      <div class="ip-head">
+        <span class="self-badge">自分のキーワード</span>
+      </div>
+    </div>
+    <div class="ip-block">
+      <label class="mini-label">キーワード</label>
+      <input id="nf-text" type="text" maxlength="20" value="${escapeHtml(node.text)}">
+      <label class="mini-label">サイズ</label>
+      <div class="size-row" id="nf-size">
+        ${[1,2,3,4,5].map(sz => `<button data-size="${sz}" class="${sz===node.size?'on':''}">${['XS','S','M','L','XL'][sz-1]}</button>`).join('')}
+      </div>
+      <label class="mini-label">色</label>
+      <div class="color-row" id="nf-color">
+        ${PALETTE.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
+      </div>
+      <label class="mini-label">説明(任意・300字)</label>
+      <textarea id="nf-desc" maxlength="300" rows="4">${escapeHtml(node.description || '')}</textarea>
+      <div class="ip-actions">
+        <button id="nf-delete" class="btn-danger">削除</button>
+        <button id="nf-save" class="btn-primary">保存</button>
+      </div>
+    </div>
+    <div class="ip-block">
+      <label class="mini-label">子のキーワード(孫ノード)</label>
+      <div class="ip-row">
+        <input id="nf-sub-input" type="text" maxlength="20" placeholder="例: ジャズ">
+        <button id="nf-sub-btn" class="btn-sm btn-ink">＋</button>
+      </div>
+      ${subs.length ? `<ul class="ip-sub-list">${subs.map(s => `<li data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}</li>`).join('')}</ul>` : ''}
+    </div>
+  `;
+}
+function wireOwnNode(el, state, tree, node, cb) {
+  el.querySelector('[data-action="back"]')?.addEventListener('click', () => cb.onSelectTree && cb.onSelectTree(tree));
+  // size buttons
+  el.querySelectorAll('#nf-size button').forEach(b => b.addEventListener('click', () => {
+    el.querySelectorAll('#nf-size button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  }));
+  el.querySelectorAll('#nf-color button').forEach(b => b.addEventListener('click', () => {
+    el.querySelectorAll('#nf-color button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  }));
 
-  box.style.left = '50%'; box.style.top = '50%'; box.style.transform = 'translate(-50%,-50%)';
-  box.classList.remove('hidden');
-
-  document.getElementById('node-edit-save').onclick = async () => {
-    const newSize = Number(box.querySelector('.size-row button.on')?.dataset.size || n.size);
-    const newColor = cr.querySelector('button.on')?.dataset.color || n.color;
-    const newText = txt.value.trim();
-    const newDesc = desc.value.trim();
+  el.querySelector('#nf-save').addEventListener('click', async () => {
+    const newText = el.querySelector('#nf-text').value.trim();
     if (!newText) return;
+    const newSize = Number(el.querySelector('#nf-size .on')?.dataset.size || node.size);
+    const newColor = el.querySelector('#nf-color .on')?.dataset.color || node.color;
+    const newDesc = el.querySelector('#nf-desc').value.trim() || null;
     try {
       const saved = await api.upsertNode(state.session.editToken, tree.id, {
-        id: n.id, text: newText, size: newSize, color: newColor, ord: n.ord,
-        description: newDesc || null
+        id: node.id, text: newText, size: newSize, color: newColor,
+        ord: node.ord, description: newDesc
       });
-      tree.nodes[idx] = saved;
-      box.classList.add('hidden');
-      rerender && rerender();
-      onChange && onChange();
-    } catch (e) {
-      alert('保存に失敗しました: ' + e.message);
-    }
-  };
-  document.getElementById('node-edit-delete').onclick = async () => {
-    if (!confirm('このキーワードを削除しますか?')) return;
+      Object.assign(node, saved);
+      cb.onRerender && cb.onRerender();
+    } catch (e) { alert('保存失敗: ' + e.message); }
+  });
+
+  el.querySelector('#nf-delete').addEventListener('click', async () => {
+    if (!confirm('このキーワード(と孫)を削除しますか?')) return;
     try {
-      await api.deleteNode(state.session.editToken, n.id);
-      tree.nodes.splice(idx, 1);
-      box.classList.add('hidden');
-      rerender && rerender();
-      onChange && onChange();
-    } catch (e) {
-      alert('削除に失敗しました: ' + e.message);
-    }
-  };
-  document.getElementById('node-edit-cancel').onclick = () => box.classList.add('hidden');
-}
+      await api.deleteNode(state.session.editToken, node.id);
+      // 自分自身とsubを配列からも除去
+      const victims = new Set([node.id]);
+      (tree.nodes || []).forEach(n => { if (victims.has(n.parent_id)) victims.add(n.id); });
+      tree.nodes = tree.nodes.filter(n => !victims.has(n.id));
+      cb.onSelectTree && cb.onSelectTree(tree); // 親に戻る
+    } catch (e) { alert('削除失敗: ' + e.message); }
+  });
 
-// 読み取り専用ノード詳細(他人の樹のノードをタップしたとき)
-export function openNodeDetail(tree, node) {
-  const box = document.getElementById('node-detail');
-  document.getElementById('node-detail-title').textContent = node.text;
-  document.getElementById('node-detail-owner').textContent = `${tree.name} さんのキーワード`;
-  const descEl = document.getElementById('node-detail-desc');
-  if (node.description) {
-    descEl.textContent = node.description;
-    descEl.style.display = '';
-  } else {
-    descEl.textContent = '';
-    descEl.style.display = 'none';
+  // 子ノード(孫)追加
+  async function addSub() {
+    const input = el.querySelector('#nf-sub-input');
+    const txt = input.value.trim();
+    if (!txt) return;
+    try {
+      const saved = await api.upsertNode(state.session.editToken, tree.id, {
+        text: txt, size: 2, color: node.color, ord: (tree.nodes || []).filter(n => n.parent_id === node.id).length,
+        parent_id: node.id
+      });
+      tree.nodes.push(saved);
+      input.value = '';
+      cb.onRerender && cb.onRerender();
+    } catch (e) { alert('保存失敗: ' + e.message); }
   }
-  // サイズと色のプレビュー
-  document.getElementById('node-detail-dot').style.background = node.color;
-  box.classList.remove('hidden');
-  document.getElementById('node-detail-close').onclick = () => box.classList.add('hidden');
+  el.querySelector('#nf-sub-btn')?.addEventListener('click', addSub);
+  el.querySelector('#nf-sub-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSub(); });
+
+  el.querySelectorAll('.ip-sub-list li').forEach(li => {
+    li.addEventListener('click', () => {
+      const nid = li.dataset.nodeId;
+      const n = tree.nodes.find(x => x.id === nid);
+      if (n && cb.onSelectNode) cb.onSelectNode(tree, n);
+    });
+  });
 }
 
-// 他人の樹タップ(幹)→ ノード一覧(読み取り専用)
-export function openTreeDetail(tree) {
-  const box = document.getElementById('tree-detail');
-  document.getElementById('tree-detail-name').textContent = tree.name;
-  const d = new Date(tree.createdAt || tree.created_at);
-  const dateStr = isNaN(d) ? '' : ` · ${d.getMonth()+1}月${d.getDate()}日植樹`;
-  document.getElementById('tree-detail-meta').textContent = `${(tree.nodes||[]).length}個のキーワード${dateStr}`;
-  const ul = document.getElementById('tree-detail-list');
-  ul.innerHTML = (tree.nodes || []).map(n =>
-    `<li><span class="dot" style="background:${n.color}"></span>
-      <span class="kw">${escapeHtml(n.text)}</span>
-      ${n.description ? `<div class="desc">${escapeHtml(n.description)}</div>` : ''}
-    </li>`
-  ).join('');
-  box.classList.remove('hidden');
-  document.getElementById('tree-detail-close').onclick = () => box.classList.add('hidden');
+// ----- 他人のノード(閲覧) -----
+function otherNodeHTML(tree, node) {
+  const subs = (tree.nodes || []).filter(n => n.parent_id === node.id);
+  return `
+    <div class="ip-block">
+      <p class="ip-back-link"><button data-action="back" class="btn-link">← ${escapeHtml(tree.name)}さんの樹</button></p>
+      <div class="ip-head">
+        <p class="ip-hint">${escapeHtml(tree.name)} さんのキーワード</p>
+        <div class="ip-kw-head">
+          <span class="dot-lg" style="background:${node.color}"></span>
+          <h2 class="ip-title">${escapeHtml(node.text)}</h2>
+        </div>
+      </div>
+    </div>
+    ${node.description ? `<div class="ip-block"><div class="ip-desc-box">${escapeHtml(node.description)}</div></div>` : '<div class="ip-block"><p class="ip-hint">(説明なし)</p></div>'}
+    ${subs.length ? `
+      <div class="ip-block">
+        <label class="mini-label">関連するキーワード</label>
+        <ul class="ip-sub-list">${subs.map(s => `<li data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}${s.description ? '<span class="desc-mark">…</span>' : ''}</li>`).join('')}</ul>
+      </div>` : ''}
+  `;
+}
+function wireOtherNode(el, state, tree, node, cb) {
+  el.querySelector('[data-action="back"]')?.addEventListener('click', () => cb.onSelectTree && cb.onSelectTree(tree));
+  el.querySelectorAll('.ip-sub-list li').forEach(li => {
+    li.addEventListener('click', () => {
+      const nid = li.dataset.nodeId;
+      const n = tree.nodes.find(x => x.id === nid);
+      if (n && cb.onSelectNode) cb.onSelectNode(tree, n);
+    });
+  });
 }

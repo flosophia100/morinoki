@@ -1,4 +1,4 @@
-import { drawTree } from './tree.js';
+import { drawTree, trunkRadiusFor } from './tree.js';
 import { seededRandom } from './utils.js';
 
 export function layoutRandom(trees) {
@@ -6,8 +6,8 @@ export function layoutRandom(trees) {
     const x = Number(t.x), y = Number(t.y);
     if (!isFinite(x) || !isFinite(y) || (x === 0 && y === 0)) {
       const rng = seededRandom(Number(t.seed) || 1);
-      t.x = (rng() - 0.5) * 1000;
-      t.y = (rng() - 0.5) * 1000;
+      t.x = (rng() - 0.5) * 1200;
+      t.y = (rng() - 0.5) * 1200;
     } else {
       t.x = x; t.y = y;
     }
@@ -30,8 +30,6 @@ export function createForest(canvas, state) {
   resize();
   window.addEventListener('resize', () => { resize(); render(); });
 
-  // interaction state
-  // mode: 'pan' | 'drag-tree' | 'drag-node' | null
   let drag = null;
 
   function pt(e) {
@@ -43,19 +41,20 @@ export function createForest(canvas, state) {
     return { x: (x - state.view.ox) / state.view.scale, y: (y - state.view.oy) / state.view.scale };
   }
 
-  // ヒットテスト: 最前面の樹 > 自分の樹なら中のノードまで判定
-  // 戻り値: { type: 'node', tree, node } | { type: 'trunk', tree } | null
+  // ヒットテスト: ノード(最前面・深さ優先) > 幹
   function hitTest(sx, sy) {
     const w = screenToWorld(sx, sy);
     const trees = state.trees || [];
-    // ノード(最前面から) — ただし自分の樹のみ(編集対象)
+    // ノード(deeperが優先、自分の樹だけ編集対象として返す — 他人はreadonly)
     for (let i = trees.length - 1; i >= 0; i--) {
       const t = trees[i];
-      for (let j = (t.nodes || []).length - 1; j >= 0; j--) {
-        const n = t.nodes[j];
+      const nodes = t.nodes || [];
+      // 深い順
+      const sorted = nodes.slice().sort((a, b) => (b._depth || 0) - (a._depth || 0));
+      for (const n of sorted) {
         if (n._x == null) continue;
         const dx = w.x - n._x, dy = w.y - n._y;
-        const r = (n._r || 10) / state.view.scale;
+        const r = n._r || 10;
         if (dx*dx + dy*dy <= r*r) {
           return { type: 'node', tree: t, node: n };
         }
@@ -65,7 +64,7 @@ export function createForest(canvas, state) {
     for (let i = trees.length - 1; i >= 0; i--) {
       const t = trees[i];
       const dx = w.x - t.x, dy = w.y - t.y;
-      const r = (t._trunkR || 12) / state.view.scale * 2; // タップしやすく
+      const r = (t._trunkR || 28);
       if (dx*dx + dy*dy <= r*r) {
         return { type: 'trunk', tree: t };
       }
@@ -77,11 +76,8 @@ export function createForest(canvas, state) {
     const p = pt(e);
     const hit = hitTest(p.x, p.y);
     const world = screenToWorld(p.x, p.y);
-    drag = {
-      start: p, last: p, moved: 0, startWorld: world,
-      mode: 'pan', hit
-    };
-    // 自分の樹/ノードのみドラッグ可能
+    drag = { start: p, last: p, moved: 0, startWorld: world, mode: 'pan', hit };
+
     if (hit && state.session && hit.tree.id === state.selfTreeId) {
       if (hit.type === 'trunk') {
         drag.mode = 'drag-tree';
@@ -89,14 +85,12 @@ export function createForest(canvas, state) {
         drag.origY = hit.tree.y;
       } else if (hit.type === 'node') {
         drag.mode = 'drag-node';
-        // ノードのオフセット(幹からの相対位置)を初期化
-        // 既存offsetがなければ、描画されている位置(_x, _y)から算出
         drag.origOffX = hit.node.offset_x != null
           ? Number(hit.node.offset_x)
-          : (hit.node._x - hit.tree.x);
+          : (hit.node._x - (hit.node._parentX || hit.tree.x));
         drag.origOffY = hit.node.offset_y != null
           ? Number(hit.node.offset_y)
-          : (hit.node._y - hit.tree.y);
+          : (hit.node._y - (hit.node._parentY || hit.tree.y));
       }
     }
   }
@@ -120,7 +114,6 @@ export function createForest(canvas, state) {
       drag.hit.node.offset_y = drag.origOffY + worldDy;
       render();
     } else {
-      // pan
       state.view.ox += dx;
       state.view.oy += dy;
       render();
@@ -133,19 +126,15 @@ export function createForest(canvas, state) {
     drag = null;
 
     if (d.moved > 6) {
-      // ドラッグ終了 → 永続化
-      if (d.mode === 'drag-tree' && state.onTreeMoved) {
-        state.onTreeMoved(d.hit.tree);
-      } else if (d.mode === 'drag-node' && state.onNodeMoved) {
-        state.onNodeMoved(d.hit.tree, d.hit.node);
-      }
+      if (d.mode === 'drag-tree' && state.onTreeMoved) state.onTreeMoved(d.hit.tree);
+      else if (d.mode === 'drag-node' && state.onNodeMoved) state.onNodeMoved(d.hit.tree, d.hit.node);
     } else {
-      // タップ: 対象があればそれに応じてハンドラを呼ぶ
       if (d.hit) {
         if (d.hit.type === 'trunk' && state.onTrunkTap) state.onTrunkTap(d.hit.tree);
         else if (d.hit.type === 'node' && state.onNodeTap) state.onNodeTap(d.hit.tree, d.hit.node);
+      } else {
+        if (state.onEmptyTap) state.onEmptyTap();
       }
-      // 空地はなにもしない(以前の「植樹モーダル」は廃止)
     }
   }
 
@@ -180,7 +169,7 @@ export function createForest(canvas, state) {
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
     (state.trees || []).forEach(t => {
-      drawTree(ctx, t, t.x, t.y, 1.0, { highlight: t.id === state.selfTreeId });
+      drawTree(ctx, t, t.x, t.y, 1.0, { isSelf: t.id === state.selfTreeId });
     });
     ctx.restore();
   }

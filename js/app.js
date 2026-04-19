@@ -11,7 +11,7 @@ function fitForestToView(canvas, state) {
   if (!state.trees.length) return;
   const rect = canvas.getBoundingClientRect();
   const W = rect.width, H = rect.height;
-  const pad = 140;
+  const pad = 180;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   state.trees.forEach(t => {
     minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
@@ -61,7 +61,7 @@ function initIndex() {
 
 async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
-  const { openPlantModal, openNodePanel, openNodeEdit, openNodeDetail, openTreeDetail } = await import('./editor.js');
+  const { openPlantModal, renderInfoPanel } = await import('./editor.js');
   const { loadSession, isTokenExpired, clearSession } = await import('./auth.js');
 
   const slug = location.pathname.match(/\/r\/([^\/]+)/)?.[1] || new URLSearchParams(location.search).get('slug');
@@ -69,8 +69,10 @@ async function initRoom() {
 
   const state = {
     room: null, trees: [], session: null, selfTreeId: null,
-    onTrunkTap: null, onNodeTap: null, onTreeMoved: null, onNodeMoved: null,
-    view: null
+    onTrunkTap: null, onNodeTap: null, onEmptyTap: null,
+    onTreeMoved: null, onNodeMoved: null,
+    view: null,
+    selection: null, // { kind:'tree', tree } | { kind:'node', tree, node } | null
   };
 
   try { state.room = await api.getRoomBySlug(slug); }
@@ -91,34 +93,78 @@ async function initRoom() {
 
   if (state.trees.length) fitForestToView(canvas, state);
 
-  // ===== タップ/クリック =====
-  // 幹タップ: 自分の樹 → ノードパネル、他人の樹 → 読み取り詳細
-  state.onTrunkTap = (tree) => {
-    if (state.session && tree.id === state.selfTreeId) {
-      openNodePanel(state, tree, () => forest.render());
-    } else {
-      openTreeDetail(tree);
-    }
-  };
-  // ノードタップ: 自分のノードなら編集、他人のノードなら詳細表示
-  state.onNodeTap = (tree, node) => {
-    if (state.session && tree.id === state.selfTreeId) {
-      const idx = tree.nodes.indexOf(node);
-      openNodeEdit(state, tree, idx, null, () => forest.render());
-    } else {
-      openNodeDetail(tree, node);
-    }
+  // ==== コールバック群(先に定義 — updatePanelから参照される) ====
+  const panelCallbacks = {
+    onIdle: () => { state.selection = null; updatePanel(); forest.render(); },
+    onPlant: () => openPlanting(),
+    onFocusSelf: () => {
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) {
+        state.selection = { kind: 'tree', tree: mine };
+        centerOn(mine);
+      }
+      updatePanel();
+      forest.render();
+    },
+    onLogout: () => {
+      if (!confirm('session切替: あなたの編集権限を端末から消します(復元キーと合言葉があれば後から再認証可能)')) return;
+      clearSession(slug);
+      state.session = null;
+      state.selfTreeId = null;
+      state.selection = null;
+      updatePanel(); updatePlantBtn(); forest.render();
+    },
+    onRerender: () => { updatePanel(); forest.render(); },
+    onSelectNode: (tree, node) => {
+      state.selection = { kind: 'node', tree, node };
+      updatePanel(); forest.render();
+    },
+    onSelectTree: (tree) => {
+      state.selection = { kind: 'tree', tree };
+      updatePanel(); forest.render();
+    },
   };
 
-  // ===== ドラッグ終了後の永続化 =====
+  function updatePanel() {
+    renderInfoPanel(state, state.selection, panelCallbacks);
+  }
+  function updatePlantBtn() {
+    const btn = document.getElementById('plant-btn');
+    if (!btn) return;
+    if (state.session) {
+      btn.textContent = '自分の樹';
+      btn.dataset.mode = 'self';
+    } else {
+      btn.textContent = '+ 樹を植える';
+      btn.dataset.mode = 'plant';
+    }
+  }
+  function centerOn(tree) {
+    const rect = canvas.getBoundingClientRect();
+    state.view = { ox: rect.width / 2 - tree.x * state.view.scale, oy: rect.height / 2 - tree.y * state.view.scale, scale: state.view.scale };
+  }
+
+  // 初期の左パネル: 自分の樹があれば自分の樹、なければidle
+  if (state.session) {
+    const mine = state.trees.find(t => t.id === state.selfTreeId);
+    if (mine) state.selection = { kind: 'tree', tree: mine };
+  }
+  updatePanel();
+  updatePlantBtn();
+  forest.render();
+
+  // ==== canvas クリック ====
+  state.onTrunkTap = (tree) => { state.selection = { kind: 'tree', tree }; updatePanel(); forest.render(); };
+  state.onNodeTap = (tree, node) => { state.selection = { kind: 'node', tree, node }; updatePanel(); forest.render(); };
+  state.onEmptyTap = () => { state.selection = null; updatePanel(); forest.render(); };
+
+  // ==== ドラッグ永続化 ====
   state.onTreeMoved = async (tree) => {
     forest.render();
     if (!state.session) return;
     try {
       await api.updateTreePosition(state.session.editToken, tree.id, tree.x, tree.y);
-    } catch (e) {
-      console.error('update_tree_position failed', e);
-    }
+    } catch (e) { console.error('updateTreePosition:', e); }
   };
   state.onNodeMoved = async (tree, node) => {
     forest.render();
@@ -126,31 +172,36 @@ async function initRoom() {
     try {
       const saved = await api.upsertNode(state.session.editToken, tree.id, {
         id: node.id, text: node.text, size: node.size, color: node.color, ord: node.ord,
-        offset_x: node.offset_x, offset_y: node.offset_y,
-        description: node.description
+        offset_x: node.offset_x, offset_y: node.offset_y, description: node.description
       });
       Object.assign(node, saved);
       forest.render();
-    } catch (e) {
-      console.error('upsert_node (offset) failed', e);
-    }
+    } catch (e) { console.error('upsertNode(offset):', e); }
   };
 
-  // 「+ 樹を植える」だけが植樹モーダルを開く(空地タップは無反応)
+  // ==== 植樹ボタン ====
   function openPlanting() {
+    if (state.session) {
+      // 一人一樹制約: 自分の樹にフォーカス
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) {
+        state.selection = { kind: 'tree', tree: mine };
+        centerOn(mine);
+        updatePanel(); forest.render();
+      }
+      return;
+    }
     openPlantModal(state, async () => {
       state.session = loadSession(slug);
       state.selfTreeId = state.session.treeId;
       await reload();
       fitForestToView(canvas, state);
-      forest.render();
       const mine = state.trees.find(t => t.id === state.selfTreeId);
-      if (mine) openNodePanel(state, mine, () => forest.render());
+      if (mine) state.selection = { kind: 'tree', tree: mine };
+      updatePanel(); updatePlantBtn(); forest.render();
     });
   }
   document.getElementById('plant-btn').addEventListener('click', openPlanting);
-
-  forest.render();
 
   async function reload() {
     const trees = await api.getTrees(state.room.id);

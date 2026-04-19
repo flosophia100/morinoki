@@ -17,6 +17,11 @@ window.SUPABASE_CONFIG = {
 </head>
 <body class="page-room">
 
+<!-- 左常駐パネル -->
+<aside id="info-panel" class="info-panel">
+  <div id="info-content" class="info-content"></div>
+</aside>
+
 <header class="room-header">
   <span id="forest-name" class="forest-name">森</span>
   <span id="forest-count" class="forest-count">0本の樹</span>
@@ -27,9 +32,10 @@ window.SUPABASE_CONFIG = {
 </div>
 
 <footer class="room-footer">
-  <button id="plant-btn" class="btn-plant">+ 樹を植える</button>
+  <button id="plant-btn" class="btn-plant" data-mode="plant">+ 樹を植える</button>
 </footer>
 
+<!-- 植樹モーダル(フローティング) -->
 <div id="plant-modal" class="modal hidden">
   <div class="modal-panel">
     <h2>樹を植える</h2>
@@ -45,74 +51,15 @@ window.SUPABASE_CONFIG = {
   </div>
 </div>
 
+<!-- 復元キー表示 -->
 <div id="recovery-modal" class="modal hidden">
   <div class="modal-panel">
     <h2>復元キー</h2>
-    <p class="hint">合言葉を忘れたときに使います。いま必ず控えてください(この画面でしか表示されません)。</p>
+    <p class="hint">合言葉を忘れたときに使います。必ず控えてください(この画面でしか表示されません)。</p>
     <code id="recovery-key"></code>
     <div class="modal-actions">
       <button id="recovery-copy" class="btn-secondary">コピー</button>
       <button id="recovery-ok" class="btn-primary">保存した</button>
-    </div>
-  </div>
-</div>
-
-<aside id="node-panel" class="node-panel hidden">
-  <header>
-    <span id="node-panel-name">-</span>
-    <button id="node-panel-close">×</button>
-  </header>
-  <div class="node-add">
-    <input id="node-input" type="text" placeholder="キーワード" maxlength="20">
-    <button id="node-add-btn">＋</button>
-  </div>
-  <ul id="node-list"></ul>
-</aside>
-
-<div id="node-edit" class="node-edit hidden">
-  <label class="mini-label">キーワード</label>
-  <input id="node-edit-text" type="text" maxlength="20">
-  <label class="mini-label">サイズ</label>
-  <div class="size-row">
-    <button data-size="1">XS</button><button data-size="2">S</button>
-    <button data-size="3">M</button><button data-size="4">L</button><button data-size="5">XL</button>
-  </div>
-  <label class="mini-label">色</label>
-  <div class="color-row" id="color-row"></div>
-  <label class="mini-label">説明(任意・300字まで)</label>
-  <textarea id="node-edit-desc" maxlength="300" rows="3" placeholder="このキーワードについての補足など"></textarea>
-  <div class="node-edit-actions">
-    <button id="node-edit-delete" class="btn-danger">削除</button>
-    <button id="node-edit-cancel" class="btn-secondary">閉じる</button>
-    <button id="node-edit-save" class="btn-primary">保存</button>
-  </div>
-</div>
-
-<!-- 他人のノード詳細(読み取り専用) -->
-<div id="node-detail" class="modal hidden">
-  <div class="modal-panel">
-    <div class="node-detail-head">
-      <span id="node-detail-dot" class="dot-lg"></span>
-      <div>
-        <h3 id="node-detail-title">-</h3>
-        <p id="node-detail-owner" class="hint">-</p>
-      </div>
-    </div>
-    <p id="node-detail-desc" class="node-detail-desc"></p>
-    <div class="modal-actions">
-      <button id="node-detail-close" class="btn-primary">閉じる</button>
-    </div>
-  </div>
-</div>
-
-<!-- 他人の樹詳細(幹タップ) -->
-<div id="tree-detail" class="modal hidden">
-  <div class="modal-panel">
-    <h2 id="tree-detail-name">-</h2>
-    <p id="tree-detail-meta" class="hint">-</p>
-    <ul id="tree-detail-list" class="tree-detail-list"></ul>
-    <div class="modal-actions">
-      <button id="tree-detail-close" class="btn-primary">閉じる</button>
     </div>
   </div>
 </div>

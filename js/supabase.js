@@ -23,15 +23,19 @@ export const api = {
     rpc('create_tree', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
   authTree: (treeId, secret) =>
     rpc('auth_tree', { p_tree_id: treeId, p_secret: secret }),
-  upsertNode: (token, treeId, node) =>
-    rpc('upsert_node', {
+  upsertNode: (token, treeId, node) => {
+    const args = {
       p_edit_token: token, p_tree_id: treeId,
       p_id: node.id || null, p_text: node.text,
       p_size: node.size, p_color: node.color, p_ord: node.ord || 0,
       p_description: node.description === undefined ? null : node.description,
       p_offset_x: node.offset_x === undefined ? null : node.offset_x,
-      p_offset_y: node.offset_y === undefined ? null : node.offset_y
-    }),
+      p_offset_y: node.offset_y === undefined ? null : node.offset_y,
+    };
+    // migration 003 適用後のみ parent_id を送信。未適用でもトップレベルは動作
+    if (node.parent_id) args.p_parent_id = node.parent_id;
+    return rpc('upsert_node', args);
+  },
   clearNodeField: (token, nodeId, field) =>
     rpc('clear_node_field', { p_edit_token: token, p_node_id: nodeId, p_field: field }),
   deleteNode: (token, nodeId) =>
