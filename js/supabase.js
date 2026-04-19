@@ -8,14 +8,16 @@ if (!cfg || !cfg.url || !cfg.anonKey) {
 export const supabase = cfg && cfg.url
   ? createClient(cfg.url, cfg.anonKey, {
       auth: { persistSession: false },
+      // Realtime: accessToken callback を明示。未設定だと anon接続で TIMED_OUT する
+      accessToken: async () => cfg.anonKey,
       realtime: { params: { apikey: cfg.anonKey, eventsPerSecond: 10 } }
     })
   : null;
 
-// Realtime送信時に明示的にapikeyを使う
-if (supabase) {
-  try { supabase.realtime.setAuth(cfg.anonKey); } catch (e) {}
-}
+// 明示的にsetAuthしてaccessTokenValueを即時セット(subscribe時にTIMED_OUT回避)
+export const realtimeReady = supabase
+  ? supabase.realtime.setAuth(cfg.anonKey).catch((e) => console.warn('setAuth failed:', e))
+  : Promise.resolve();
 
 function rpc(name, args) {
   if (!supabase) return Promise.reject(new Error('Supabase not configured'));

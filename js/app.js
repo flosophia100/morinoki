@@ -163,6 +163,10 @@ async function initRoom() {
   live.start();
   console.log('[phase2] liveforest started, treeIds:', [...treeIdsRef]);
 
+  // Realtime setAuth完了を待つ
+  const { realtimeReady } = await import('./supabase.js');
+  await realtimeReady;
+
   // Realtime購読: 他ユーザーの変更を検知 → reload
   const onRealtime = debounce(async ({ source, payload }) => {
     try {
