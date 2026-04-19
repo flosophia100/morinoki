@@ -6,8 +6,16 @@ if (!cfg || !cfg.url || !cfg.anonKey) {
 }
 
 export const supabase = cfg && cfg.url
-  ? createClient(cfg.url, cfg.anonKey, { auth: { persistSession: false } })
+  ? createClient(cfg.url, cfg.anonKey, {
+      auth: { persistSession: false },
+      realtime: { params: { apikey: cfg.anonKey, eventsPerSecond: 10 } }
+    })
   : null;
+
+// Realtime送信時に明示的にapikeyを使う
+if (supabase) {
+  try { supabase.realtime.setAuth(cfg.anonKey); } catch (e) {}
+}
 
 function rpc(name, args) {
   if (!supabase) return Promise.reject(new Error('Supabase not configured'));
