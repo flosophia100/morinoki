@@ -68,7 +68,10 @@ async function initRoom() {
   const { atmosphereAt } = await import('./atmosphere.js');
   const { showToast, showError, setConnectionStatus } = await import('./toast.js');
 
-  const slug = location.pathname.match(/\/r\/([^\/]+)/)?.[1] || new URLSearchParams(location.search).get('slug');
+  // /r/:slug (通常) または /a/:slug (管理者モード) または ?slug=xxx&admin=1
+  const urlMatch = location.pathname.match(/\/(r|a)\/([^\/]+)/);
+  const slug = urlMatch?.[2] || new URLSearchParams(location.search).get('slug');
+  const isAdminPath = urlMatch?.[1] === 'a' || new URLSearchParams(location.search).get('admin') === '1';
   if (!slug) {
     const t = await import('./toast.js');
     t.showError('ルームが指定されていません');
@@ -77,12 +80,17 @@ async function initRoom() {
 
   const state = {
     room: null, trees: [], session: null, selfTreeId: null,
+    adminToken: null, isAdminMode: isAdminPath,
     onTrunkTap: null, onNodeTap: null, onEmptyTap: null,
     onTreeMoved: null, onNodeMoved: null,
     view: null,
     selection: null,
-    atmo: atmosphereAt(), // 時間帯(render時に毎回最新を使うので実質更新)
+    atmo: atmosphereAt(),
   };
+  // 既存 admin token を復元
+  const ADMIN_KEY = 'mori.admin.' + slug;
+  const savedAdmin = localStorage.getItem(ADMIN_KEY);
+  if (savedAdmin) state.adminToken = savedAdmin;
 
   try { state.room = await api.getRoomBySlug(slug); }
   catch {
@@ -133,6 +141,29 @@ async function initRoom() {
       catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
     },
     onTimelapse: () => startTimelapse(),
+    onAdminLogin: async (passcode) => {
+      const token = await api.adminLogin(slug, passcode);
+      state.adminToken = token;
+      localStorage.setItem(ADMIN_KEY, token);
+      updatePanel(); forest.render();
+      showToast('管理者としてログインしました', 'success');
+    },
+    onAdminLogout: () => {
+      state.adminToken = null;
+      localStorage.removeItem(ADMIN_KEY);
+      updatePanel(); forest.render();
+      showToast('管理者ログアウト', 'success');
+    },
+    onAdminChangePw: async () => {
+      const cur = prompt('現在の管理者合言葉(既定は admin)');
+      if (cur == null) return;
+      const nw = prompt('新しい管理者合言葉(4文字以上)');
+      if (!nw) return;
+      try {
+        await api.setAdminPasscode(slug, cur, nw);
+        showToast('管理者合言葉を変更しました', 'success');
+      } catch (e) { showError(e, '変更失敗'); }
+    },
     onAuthSubmit: async ({ name, passcode, email }) => {
       const res = await api.plantOrLogin(state.room.slug, name, passcode, email);
       const row = Array.isArray(res) ? res[0] : res;
@@ -268,9 +299,12 @@ async function initRoom() {
   };
   state.onNodeMoved = async (tree, node) => {
     forest.render();
-    if (!state.session) return;
+    // ドラッグ終了で連動波紋
+    live.bumpNode(node, 4);
+    const token = state.adminToken || state.session?.editToken;
+    if (!token) return;
     try {
-      const saved = await api.upsertNode(state.session.editToken, tree.id, {
+      const saved = await api.upsertNode(token, tree.id, {
         id: node.id, text: node.text, size: node.size, color: node.color, ord: node.ord,
         offset_x: node.offset_x, offset_y: node.offset_y, description: node.description
       });

@@ -84,6 +84,11 @@ body.page-room { overflow: hidden; background: #ede3cf; }
   background: var(--gold); color: var(--paper); padding: 0.15rem 0.5rem;
   letter-spacing: 0.15em; margin-bottom: 0.3rem;
 }
+.admin-badge {
+  display: inline-block; font-family: 'Klee One',serif; font-size: 0.7rem;
+  background: var(--bud); color: var(--paper); padding: 0.1rem 0.45rem;
+  letter-spacing: 0.15em; vertical-align: middle; margin-left: 0.3rem;
+}
 
 .size-row { display: flex; gap: 0.2rem; }
 .size-row button { flex: 1; padding: 0.45rem 0; font-family: 'Klee One',serif; font-size: 0.78rem; background: transparent; border: 1px solid rgba(74,63,50,0.2); cursor: pointer; }

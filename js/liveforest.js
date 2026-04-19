@@ -1,4 +1,5 @@
 import { stringHash } from './utils.js';
+import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './nodesim.js';
 
 // 軽量な「生きている森」シミュレータ
 // - 風: 各樹が独自の位相でゆっくりゆらぐ
@@ -79,15 +80,15 @@ export class LiveForest {
     const trees = this.getTrees();
 
     // 風: 位相ずれでゆらぎ(ドラッグ中の樹はスキップ)
-    // 視認性を上げるため振幅を拡大
+    // さらに視認性を上げるため振幅をほぼ倍に
     trees.forEach(t => {
       this.ensureInit(t);
       if (t._dragging) { t._windX = 0; t._windY = 0; return; }
       const seed = Number(t.seed) || stringHash(t.name || 'x');
       const pX = (seed % 1009) * 0.01;
       const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
-      const windX = Math.sin(this.t * 0.6 + pX) * 6 + Math.sin(this.t * 0.25 + pX * 1.7) * 2.5;
-      const windY = Math.cos(this.t * 0.52 + pY) * 5 + Math.cos(this.t * 0.21 + pY * 1.3) * 2.2;
+      const windX = Math.sin(this.t * 0.6 + pX) * 11 + Math.sin(this.t * 0.25 + pX * 1.7) * 4.5;
+      const windY = Math.cos(this.t * 0.52 + pY) * 9 + Math.cos(this.t * 0.21 + pY * 1.3) * 4.0;
       t._windX = windX;
       t._windY = windY;
     });
@@ -169,6 +170,16 @@ export class LiveForest {
       t._displayY = t.y + (t._driftY || 0) + (t._windY || 0);
       t._displayScale = t._spawnScale;
     });
+
+    // ===== ノード粒子シム(wordmap流のcollide/charge/wind) =====
+    tickNodeSim(trees, this.t);
+  }
+
+  // ノード編集/作成/移動などで呼ぶ: 連動した波紋 + そのノードへのインパルス
+  bumpNode(node, strength = 5) {
+    const trees = this.getTrees();
+    nodeImpulse(node, strength);
+    nodeRipple(node, trees, strength * 0.6);
   }
 }
 

@@ -88,7 +88,8 @@ export function openPlantModal() { /* removed */ }
 // selection: null | { kind:'tree', tree } | { kind:'node', tree, node }
 export function renderInfoPanel(state, selection, callbacks) {
   const el = document.getElementById('info-content');
-  const isSelfTree = (tree) => !!state.session && tree.id === state.selfTreeId;
+  // admin モードなら 全樹を "自分の樹扱い" で編集UI表示
+  const isSelfTree = (tree) => !!state.adminToken || (!!state.session && tree.id === state.selfTreeId);
 
   if (!selection) {
     el.innerHTML = idleHTML(state);
@@ -119,13 +120,34 @@ export function renderInfoPanel(state, selection, callbacks) {
 // ----- Idle -----
 function idleHTML(state) {
   const hasSession = !!state.session;
+  const isAdmin = !!state.adminToken;
   const sessionName = state.session?.treeName || '';
+  const adminMode = state.isAdminMode;
   return `
     <div class="ip-block">
-      <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || '森')}</h2>
-      <p class="ip-hint">${(state.trees || []).length} 本の樹</p>
+      <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || '森')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
+      <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
     </div>
-    ${hasSession ? `
+    ${adminMode && !isAdmin ? `
+      <div class="ip-block ip-auth-form">
+        <label class="mini-label">管理者としてログイン</label>
+        <p class="ip-desc" style="margin-bottom:0.4rem">このURLは管理者専用です。管理者の合言葉で入ってください。</p>
+        <label class="mini-label">管理者合言葉</label>
+        <input id="admin-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="管理者合言葉">
+        <button data-action="admin-login" class="btn-primary w-full" style="margin-top:0.6rem">管理者として入る</button>
+        <p class="ip-hint" style="font-size:0.72rem;margin-top:0.5rem">初期の合言葉は「admin」。最初に入ったら必ず変更してください。</p>
+        <p id="admin-error" class="error hidden"></p>
+      </div>
+    ` : ''}
+    ${isAdmin ? `
+      <div class="ip-block">
+        <label class="mini-label">管理者モード</label>
+        <p class="ip-desc" style="margin-bottom:0.4rem">全員の樹と枝を加筆修正できます。</p>
+        <button data-action="admin-change-pw" class="btn-secondary w-full">合言葉を変更</button>
+        <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
+      </div>
+    ` : ''}
+    ${(!adminMode && hasSession) ? `
       <div class="ip-block">
         <label class="mini-label">ログイン中</label>
         <p class="ip-login-name"><span class="self-badge">樹</span> ${escapeHtml(sessionName)}</p>
@@ -133,7 +155,7 @@ function idleHTML(state) {
         <button data-action="logout" class="btn-secondary w-full" style="margin-top:0.4rem">ログアウト</button>
         <p class="ip-hint" style="font-size:0.76rem;margin-top:0.3rem">ログアウトすると別の人として入り直せます</p>
       </div>
-    ` : `
+    ` : (!adminMode ? `
       <div class="ip-block ip-auth-form">
         <label class="mini-label">入る / 植える</label>
         <p class="ip-desc" style="margin-bottom:0.4rem">
@@ -151,14 +173,14 @@ function idleHTML(state) {
         <button data-action="auth-submit" class="btn-primary w-full" style="margin-top:0.6rem">入る / 植える</button>
         <p id="auth-error" class="error hidden"></p>
       </div>
-    `}
-    ${(state.trees || []).length > 0 ? `
+    ` : '')}
+    ${(isAdmin && (state.trees || []).length > 0) ? `
       <div class="ip-block">
-        <label class="mini-label">森の物語</label>
+        <label class="mini-label">森の物語(管理者のみ)</label>
         <button data-action="timelapse" class="btn-secondary w-full">タイムラプスで振り返る</button>
       </div>
       <div class="ip-block">
-        <label class="mini-label">主催者向け</label>
+        <label class="mini-label">主催者向け(管理者のみ)</label>
         <button data-action="export-csv" class="btn-secondary w-full">森をCSVで書き出す</button>
       </div>
     ` : ''}
@@ -169,6 +191,21 @@ function wireIdle(el, state, cb) {
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
   el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
+
+  // 管理者ログイン
+  const adminBtn = el.querySelector('[data-action="admin-login"]');
+  const adminErr = el.querySelector('#admin-error');
+  adminBtn?.addEventListener('click', async () => {
+    adminErr?.classList.add('hidden');
+    const pw = el.querySelector('#admin-pass')?.value || '';
+    if (pw.length < 4) { if (adminErr) { adminErr.textContent = '4文字以上'; adminErr.classList.remove('hidden'); } return; }
+    if (!cb.onAdminLogin) return;
+    try { await cb.onAdminLogin(pw); }
+    catch (e) { if (adminErr) { adminErr.textContent = e.message || '管理者ログイン失敗'; adminErr.classList.remove('hidden'); } }
+  });
+  el.querySelector('[data-action="admin-logout"]')?.addEventListener('click', () => cb.onAdminLogout && cb.onAdminLogout());
+  el.querySelector('[data-action="admin-change-pw"]')?.addEventListener('click', () => cb.onAdminChangePw && cb.onAdminChangePw());
+  el.querySelector('#admin-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') adminBtn?.click(); });
 
   const submitBtn = el.querySelector('[data-action="auth-submit"]');
   const err = el.querySelector('#auth-error');
@@ -242,7 +279,7 @@ function wireOwnTree(el, state, tree, cb) {
     const txt = input.value.trim();
     if (!txt) return;
     try {
-      const saved = await api.upsertNode(state.session.editToken, tree.id, {
+      const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
         text: txt, size: 3, color: PALETTE[0],
         ord: (tree.nodes || []).filter(n => !n.parent_id).length,
         parent_id: null
@@ -458,7 +495,7 @@ function wireOwnNode(el, state, tree, node, cb) {
     const newColor = el.querySelector('#nf-color .on')?.dataset.color || node.color;
     const newDesc = el.querySelector('#nf-desc').value.trim() || null;
     try {
-      const saved = await api.upsertNode(state.session.editToken, tree.id, {
+      const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
         id: node.id, text: newText, size: newSize, color: newColor,
         ord: node.ord, description: newDesc
       });
@@ -470,7 +507,7 @@ function wireOwnNode(el, state, tree, node, cb) {
   el.querySelector('#nf-delete').addEventListener('click', async () => {
     if (!confirm('このキーワード(と孫)を削除しますか?')) return;
     try {
-      await api.deleteNode(state.session.editToken, node.id);
+      await api.deleteNode((state.adminToken || state.session?.editToken), node.id);
       // 自分自身とsubを配列からも除去
       const victims = new Set([node.id]);
       (tree.nodes || []).forEach(n => { if (victims.has(n.parent_id)) victims.add(n.id); });
@@ -485,7 +522,7 @@ function wireOwnNode(el, state, tree, node, cb) {
     const txt = input.value.trim();
     if (!txt) return;
     try {
-      const saved = await api.upsertNode(state.session.editToken, tree.id, {
+      const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
         text: txt, size: 2, color: node.color, ord: (tree.nodes || []).filter(n => n.parent_id === node.id).length,
         parent_id: node.id
       });

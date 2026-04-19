@@ -90,7 +90,9 @@ export function createForest(canvas, state) {
     const world = screenToWorld(p.x, p.y);
     drag = { start: p, last: p, moved: 0, startWorld: world, mode: 'pan', hit };
 
-    if (hit && state.session && hit.tree.id === state.selfTreeId) {
+    // admin モードなら 全樹・全ノード編集許可、通常は自分の樹のみ
+    const canEdit = hit && (state.adminToken || (state.session && hit.tree.id === state.selfTreeId));
+    if (canEdit) {
       if (hit.type === 'trunk') {
         drag.mode = 'drag-tree';
         drag.origX = hit.tree.x;

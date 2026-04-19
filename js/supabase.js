@@ -35,6 +35,9 @@ export const api = {
     rpc('auth_tree', { p_tree_id: treeId, p_secret: secret }),
   plantOrLogin: (roomSlug, name, passcode, email) =>
     rpc('plant_or_login', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
+  adminLogin: (slug, passcode) => rpc('admin_login', { p_slug: slug, p_passcode: passcode }),
+  setAdminPasscode: (slug, currentPw, newPw) =>
+    rpc('set_admin_passcode', { p_slug: slug, p_current_passcode: currentPw, p_new_passcode: newPw }),
   upsertNode: (token, treeId, node) => {
     const args = {
       p_edit_token: token, p_tree_id: treeId,

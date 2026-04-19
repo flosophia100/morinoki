@@ -43,6 +43,10 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0) {
         ex = px + Math.cos(a) * len;
         ey = py + Math.sin(a) * len;
       }
+      // rest 位置(nodesim基準)を保存、表示座標は simDX/Y を加算
+      child._restX = ex; child._restY = ey;
+      if (child.simDX != null) ex += child.simDX;
+      if (child.simDY != null) ey += child.simDY;
 
       const sizeScale = depth === 0 ? 1 : 0.78;
       const nr = (5 + (child.size || 3) * 2) * scale * sizeScale;
