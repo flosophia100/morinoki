@@ -154,6 +154,7 @@ await test('B5. 復元キーが表示されている(16hex char)', async () => {
 let recoveryKeyA;
 await test('B6. 復元キーを保持(後続テストで使用)', async () => {
   recoveryKeyA = await pageA.$eval('#recovery-key', el => el.textContent);
+  log('             (recoveryKeyA=' + recoveryKeyA + ')');
 });
 await test('B7. 復元キー確認で閉じる → own-tree パネル', async () => {
   await pageA.click('#recovery-ok');
@@ -214,29 +215,33 @@ await test('C8. back → ownTree → 元に戻る', async () => {
 // ===== Section D: ドラッグ操作 =====
 section('Section D: ドラッグ操作');
 await test('D1. 幹ドラッグで樹位置が変わる', async () => {
-  // 実表示位置を取得してからドラッグ
-  const pos = await pageA.evaluate(() => {
+  const beforeTx = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
-    const rect = document.getElementById('forest-canvas').getBoundingClientRect();
     return {
-      x: rect.x + s.view.ox + (t._displayX ?? t.x) * s.view.scale,
-      y: rect.y + s.view.oy + (t._displayY ?? t.y) * s.view.scale,
-      tx: t.x, ty: t.y
+      tx: t.x, ty: t.y,
+      dispX: t._displayX ?? t.x,
+      dispY: t._displayY ?? t.y,
+      scale: s.view.scale,
+      ox: s.view.ox, oy: s.view.oy
     };
   });
-  await pageA.mouse.move(pos.x, pos.y);
+  const rect = await pageA.$eval('#forest-canvas', el => el.getBoundingClientRect());
+  const px = rect.x + beforeTx.ox + beforeTx.dispX * beforeTx.scale;
+  const py = rect.y + beforeTx.oy + beforeTx.dispY * beforeTx.scale;
+  // Playwrightの steps でスムーズに一気にドラッグ
+  await pageA.mouse.move(px, py);
   await pageA.mouse.down();
-  await pageA.mouse.move(pos.x + 120, pos.y + 70, { steps: 15 });
+  await pageA.mouse.move(px + 180, py + 100, { steps: 20 });
   await pageA.mouse.up();
-  await new Promise(r => setTimeout(r, 1500));
+  await new Promise(r => setTimeout(r, 2000));
   const after = await pageA.evaluate(() => {
     const s = window.__morinoki?.state;
     const t = s.trees.find(x => x.id === s.selfTreeId);
     return { x: t.x, y: t.y };
   });
-  const dx = after.x - pos.tx, dy = after.y - pos.ty;
-  if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
+  const dx = after.x - beforeTx.tx, dy = after.y - beforeTx.ty;
+  if (Math.abs(dx) < 20 && Math.abs(dy) < 20) {
     throw new Error(`no move: delta=(${dx.toFixed(1)}, ${dy.toFixed(1)})`);
   }
 });
@@ -352,10 +357,25 @@ await test('G4. 既存名前+違う合言葉はエラー', async () => {
 // ===== Section I: 復元(合言葉忘れ時) =====
 section('Section I: 復元(合言葉忘れ時)');
 await test('I1. panelのauth-passに復元キーを入力して復元', async () => {
-  // G4のエラー表示から回復。一度ページをreloadして完全に清潔な状態にする
   await pageA.reload({ waitUntil: 'networkidle' });
   await new Promise(r => setTimeout(r, 2500));
   await pageA.waitForSelector('#auth-name', { timeout: 5000 });
+  const roomInfo = await pageA.evaluate(() => ({
+    slug: window.__morinoki?.state?.room?.slug,
+    trees: window.__morinoki?.state?.trees?.map(t => t.name)
+  }));
+  log(`             state room.slug=${roomInfo.slug} trees=${JSON.stringify(roomInfo.trees)}`);
+  // 直接API呼び出しでログインを試す(UI経由で不明瞭なことを確認)
+  const direct = await pageA.evaluate(async (rk) => {
+    const mod = await import('/js/supabase.js');
+    const slug = window.__morinoki.state.room.slug;
+    try {
+      return { ok: await mod.api.plantOrLogin(slug, 'Aさん', rk, null) };
+    } catch (e) { return { err: e.message }; }
+  }, recoveryKeyA);
+  log(`             direct call: ${JSON.stringify(direct)}`);
+  if (direct.err) throw new Error('direct rpc failed: ' + direct.err);
+  // UI 経由でも動作確認
   await pageA.fill('#auth-name', 'Aさん');
   await pageA.fill('#auth-pass', recoveryKeyA);
   await pageA.click('[data-action="auth-submit"]');

@@ -141,8 +141,8 @@ function idleHTML(state) {
         </p>
         <label class="mini-label">名前</label>
         <input id="auth-name" type="text" maxlength="20" placeholder="あなたの名前 / ニックネーム" autocomplete="off">
-        <label class="mini-label">合言葉(4〜10桁)</label>
-        <input id="auth-pass" type="password" minlength="4" maxlength="10" autocomplete="off">
+        <label class="mini-label">合言葉 または 復元キー</label>
+        <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉(4桁〜)か復元キー">
         <details class="ip-details">
           <summary>メールを登録する(任意・合言葉を忘れた時の復元用)</summary>
           <label class="mini-label" style="margin-top:0.3rem">メール</label>

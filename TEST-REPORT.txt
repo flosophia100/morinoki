@@ -1,85 +1,86 @@
 ╔═══════════════════════════════════════════════════════════════╗
 ║  morinoki Full E2E Test Report                                ║
 ║  Target: https://morinoki.vercel.app                          ║
-║  Started: 2026-04-19T09:22:41.215Z                            ║
+║  Started: 2026-04-19T09:38:51.567Z                            ║
 ╚═══════════════════════════════════════════════════════════════╝
 
 ═══════════════════════════════════════════════════════════════
   Section Q: 静的検証(JS構文 + 必須ID)
 ═══════════════════════════════════════════════════════════════
-  [OK 722ms] Q1. js/*.js すべて ESM構文OK
-  [OK 0ms]   Q2. room.html 必須要素がすべて存在
+  [OK 660ms] Q1. js/*.js すべて ESM構文OK
+  [OK 1ms]   Q2. room.html 必須要素がすべて存在
   [OK 0ms]   Q3. index.html 必須要素がすべて存在
   [OK 1ms]   Q4. supabase/migrations dollar-quote バランス
 
 ═══════════════════════════════════════════════════════════════
   Section A: 森作成(index.html)
 ═══════════════════════════════════════════════════════════════
-  [OK 1421ms] A1. index.html を配信し正常表示
-  [OK 35ms]  A2. slug自動入力(英小文字+ハイフン+数字)
-  [OK 86ms]  A3. 不正slug(大文字/短い)でフォームerror
-  [OK 912ms] A4. 正常な森作成 → URL発行
+  [OK 2124ms] A1. index.html を配信し正常表示
+  [OK 42ms]  A2. slug自動入力(英小文字+ハイフン+数字)
+  [OK 104ms] A3. 不正slug(大文字/短い)でフォームerror
+  [OK 907ms] A4. 正常な森作成 → URL発行
 
 ═══════════════════════════════════════════════════════════════
   Section B: 植樹フロー
 ═══════════════════════════════════════════════════════════════
-  [OK 26ms]  B1. idleパネルに auth フォームが表示
-  [OK 466ms] B2. 合言葉4桁未満で error
+  [OK 51ms]  B1. idleパネルに auth フォームが表示
+  [OK 491ms] B2. 合言葉4桁未満で error
   [SKIP]     B3. (skip: 合言葉確認は廃止)
-  [OK 497ms] B4. 正しく入力で植樹成功 → 復元キー表示
-  [OK 22ms]  B5. 復元キーが表示されている(16hex char)
-  [OK 16ms]  B6. 復元キーを保持(後続テストで使用)
-  [OK 35ms]  B7. 復元キー確認で閉じる → own-tree パネル
+  [OK 518ms] B4. 正しく入力で植樹成功 → 復元キー表示
+  [OK 7ms]   B5. 復元キーが表示されている(16hex char)
+             (recoveryKeyA=af88d7a034e68696)
+  [OK 8ms]   B6. 復元キーを保持(後続テストで使用)
+  [OK 40ms]  B7. 復元キー確認で閉じる → own-tree パネル
 
 ═══════════════════════════════════════════════════════════════
   Section C: ノードCRUD
 ═══════════════════════════════════════════════════════════════
-  [OK 222ms] C1. キーワード追加: 音楽
-  [OK 169ms] C2. キーワード追加: 読書
-  [OK 56ms]  C3. ノードクリックで編集popover
-  [OK 745ms] C4. サイズ変更(XL)+保存
-  [OK 712ms] C5. 色変更+保存
-  [OK 1118ms] C6. 説明保存 → back → 再open で残る
-  [OK 332ms] C7. 孫ノード追加: ジャズ
-  [OK 57ms]  C8. back → ownTree → 元に戻る
+  [OK 230ms] C1. キーワード追加: 音楽
+  [OK 187ms] C2. キーワード追加: 読書
+  [OK 149ms] C3. ノードクリックで編集popover
+  [OK 707ms] C4. サイズ変更(XL)+保存
+  [OK 747ms] C5. 色変更+保存
+  [OK 1078ms] C6. 説明保存 → back → 再open で残る
+  [OK 192ms] C7. 孫ノード追加: ジャズ
+  [OK 79ms]  C8. back → ownTree → 元に戻る
 
 ═══════════════════════════════════════════════════════════════
   Section D: ドラッグ操作
 ═══════════════════════════════════════════════════════════════
-  [FAIL 1780ms] D1. 幹ドラッグで樹位置が変わる
-             → no move: delta=(0.0, 0.0)
-  [OK 469ms] D2. ホイールでズーム
+  [OK 2377ms] D1. 幹ドラッグで樹位置が変わる
+  [OK 498ms] D2. ホイールでズーム
 
 ═══════════════════════════════════════════════════════════════
   Section J: atmosphere(時間帯 + 季節)
 ═══════════════════════════════════════════════════════════════
-  [OK 4ms]   J1. atmosphereAt() が季節情報を返す
-  [OK 2ms]   J2. 深夜と昼で色調が異なる
+  [OK 3ms]   J1. atmosphereAt() が季節情報を返す
+  [OK 1ms]   J2. 深夜と昼で色調が異なる
   [OK 2ms]   J3. 春/夏/秋/冬 で 4種類のseason
 
 ═══════════════════════════════════════════════════════════════
   Section H: 共有モーダル + QR
 ═══════════════════════════════════════════════════════════════
-  [OK 95ms]  H1. 共有ボタン → モーダル表示
-  [OK 11ms]  H2. URLが表示されている
+  [OK 112ms] H1. 共有ボタン → モーダル表示
+  [OK 5ms]   H2. URLが表示されている
   [OK 7ms]   H3. QR画像が src=qrserver を含む
-  [OK 53ms]  H4. 閉じるで消える
+  [OK 84ms]  H4. 閉じるで消える
 
 ═══════════════════════════════════════════════════════════════
   Section G: 一人一樹制約 / ログアウト
 ═══════════════════════════════════════════════════════════════
-  [OK 30ms]  G1. ログイン中はidleに "ログイン中" + 名前が表示
-  [OK 1368ms] G2. 同じ名前+同じ合言葉でログイン扱い(新規植樹されない)
-  [OK 1064ms] G3. ログアウトでsessionがクリアされる
-  [FAIL 30097ms] G4. 既存名前+違う合言葉はエラー
-             → page.waitForFunction: Timeout 30000ms exceeded.
+  [OK 20ms]  G1. ログイン中はidleに "ログイン中" + 名前が表示
+  [OK 1447ms] G2. 同じ名前+同じ合言葉でログイン扱い(新規植樹されない)
+  [OK 1091ms] G3. ログアウトでsessionがクリアされる
+  [OK 271ms] G4. 既存名前+違う合言葉はエラー
 
 ═══════════════════════════════════════════════════════════════
   Section I: 復元(合言葉忘れ時)
 ═══════════════════════════════════════════════════════════════
-  [FAIL 33854ms] I1. panelのauth-passに復元キーを入力して復元
+             state room.slug=full-py55c trees=["Aさん"]
+             direct call: {"ok":{"kind":"login","tree_id":"2281dcf2-1899-4b0d-bc05-243f3b5107da","edit_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0cmVlX2lkIiA6ICIyMjgxZGNmMi0xODk5LTRiMGQtYmMwNS0yNDNmM2I1MTA3ZGEiLCAiZXhwIiA6IDE3NzcxOTYzNTd9.RuOHz7tEyEBazAYZqj1Bo5PTl2ovvPduF6QAD1ai4hs"}}
+  [FAIL 33830ms] I1. panelのauth-passに復元キーを入力して復元
              → page.waitForFunction: Timeout 30000ms exceeded.
-  [FAIL 3013ms] I2. 復元モーダル(別端末用)も引き続き機能
+  [FAIL 3023ms] I2. 復元モーダル(別端末用)も引き続き機能
              → page.waitForSelector: Timeout 3000ms exceeded.
 Call log:
 [2m  - waiting for locator('[data-action="logout"]') to be visible[22m
@@ -88,69 +89,69 @@ Call log:
 ═══════════════════════════════════════════════════════════════
   Section F: Realtime同期(2ブラウザ間)
 ═══════════════════════════════════════════════════════════════
-  [OK 77ms]  F1. Bが森に入るとAさんの樹が見える
-  [FAIL 10015ms] F2. AのキーワードがBに反映(realtime)
+  [OK 37ms]  F1. Bが森に入るとAさんの樹が見える
+  [FAIL 10002ms] F2. AのキーワードがBに反映(realtime)
              → page.waitForSelector: Timeout 10000ms exceeded.
 Call log:
 [2m  - waiting for locator('.self-badge') to be visible[22m
 
-  [OK 1040ms] F3. Bさんを植樹 → Aに反映
+  [OK 1059ms] F3. Bさんを植樹 → Aに反映
 
 ═══════════════════════════════════════════════════════════════
   Section E: 他人視点 + 共通キーワード + 散歩
 ═══════════════════════════════════════════════════════════════
-  [OK 49ms]  E1. BからAさんの樹を選択
-  [OK 3ms]   E2. 編集UIが非表示(他人の樹はreadonly)
-  [OK 4ms]   E3. 共通キーワード「音楽」が表示
-  [OK 15ms]  E4. 近くの樹リスト表示
-  [OK 5092ms] E5. 散歩ボタンで別の樹へ遷移
+  [OK 22ms]  E1. BからAさんの樹を選択
+  [OK 2ms]   E2. 編集UIが非表示(他人の樹はreadonly)
+  [OK 2ms]   E3. 共通キーワード「音楽」が表示
+  [OK 8ms]   E4. 近くの樹リスト表示
+  [OK 5068ms] E5. 散歩ボタンで別の樹へ遷移
 
 ═══════════════════════════════════════════════════════════════
   Section K: タイムラプス
 ═══════════════════════════════════════════════════════════════
-  [OK 6ms]   K1. idleに戻るとタイムラプスボタンあり
-  [OK 61ms]  K2. タイムラプス起動でbar表示
-  [OK 319ms] K3. sliderで timeCursor が動く
-  [OK 720ms] K4. playで自動進行(500ms後に値増)
-  [OK 451ms] K5. 閉じるで timeCursor が null
+  [OK 14ms]  K1. idleに戻るとタイムラプスボタンあり
+  [OK 50ms]  K2. タイムラプス起動でbar表示
+  [OK 304ms] K3. sliderで timeCursor が動く
+  [OK 722ms] K4. playで自動進行(500ms後に値増)
+  [OK 460ms] K5. 閉じるで timeCursor が null
 
 ═══════════════════════════════════════════════════════════════
   Section L: CSV書き出し
 ═══════════════════════════════════════════════════════════════
-  [OK 12ms]  L1. idleにCSVボタン
-  [OK 45ms]  L2. ダウンロードイベント発火 + 正しいファイル名
-  [OK 6ms]   L3. success toast表示
+  [OK 7ms]   L1. idleにCSVボタン
+  [OK 50ms]  L2. ダウンロードイベント発火 + 正しいファイル名
+  [OK 10ms]  L3. success toast表示
 
 ═══════════════════════════════════════════════════════════════
   Section M: Toast / エラー処理
 ═══════════════════════════════════════════════════════════════
-  [OK 5009ms] M1. 不正slug → エラーtoast
+  [OK 4940ms] M1. 不正slug → エラーtoast
 
 ═══════════════════════════════════════════════════════════════
   Section O: 接続状態 (online/offline)
 ═══════════════════════════════════════════════════════════════
-  [OK 1512ms] O1. オフラインにするとバナー表示
-  [OK 3008ms] O2. オンラインに戻るとバナー消える(または online扱い)
+  [OK 1525ms] O1. オフラインにするとバナー表示
+  [OK 3015ms] O2. オンラインに戻るとバナー消える(または online扱い)
 
 ═══════════════════════════════════════════════════════════════
   Section N: モバイルレイアウト
 ═══════════════════════════════════════════════════════════════
-  [OK 10ms]  N1. info-panelが下部ドロワー
+  [OK 8ms]   N1. info-panelが下部ドロワー
   [OK 1ms]   N2. 共有ボタン 34px以上
-  [OK 2ms]   N3. 復元ボタン 34px以上
+  [OK 1ms]   N3. 復元ボタン 34px以上
 
 ═══════════════════════════════════════════════════════════════
   Section P: パフォーマンス smoke
 ═══════════════════════════════════════════════════════════════
-             FPS: 60.3
-  [OK 1518ms] P1. FPS 30以上(tab visible)
+             FPS: 60.5
+  [OK 1504ms] P1. FPS 30以上(tab visible)
 
 ═══════════════════════════════════════════════════════════════
   サマリー
 ═══════════════════════════════════════════════════════════════
   Total:   61
-  Passed:  55
-  Failed:  5
+  Passed:  57
+  Failed:  3
   Skipped: 1
 
   セクション別:
@@ -158,10 +159,10 @@ Call log:
     ✓ Section A: 森作成(index.html)                                   pass=4 fail=0
     ✓ Section B: 植樹フロー                                             pass=6 fail=0
     ✓ Section C: ノードCRUD                                           pass=8 fail=0
-    ✗ Section D: ドラッグ操作                                            pass=1 fail=1
+    ✓ Section D: ドラッグ操作                                            pass=2 fail=0
     ✓ Section J: atmosphere(時間帯 + 季節)                              pass=3 fail=0
     ✓ Section H: 共有モーダル + QR                                       pass=4 fail=0
-    ✗ Section G: 一人一樹制約 / ログアウト                                    pass=3 fail=1
+    ✓ Section G: 一人一樹制約 / ログアウト                                    pass=4 fail=0
     ✗ Section I: 復元(合言葉忘れ時)                                        pass=0 fail=2
     ✗ Section F: Realtime同期(2ブラウザ間)                                pass=2 fail=1
     ✓ Section E: 他人視点 + 共通キーワード + 散歩                               pass=5 fail=0
@@ -174,9 +175,7 @@ Call log:
 
   Page A console errors:
     console.error: Failed to load resource: the server responded with a status of 400 ()
-    pageerror: name exists but passcode mismatch
     console.error: Failed to load resource: the server responded with a status of 400 ()
-    pageerror: name exists but passcode mismatch
 
-  Finished: 2026-04-19T09:24:47.012Z
-  Result:   5 FAILED ✗
+  Finished: 2026-04-19T09:40:28.485Z
+  Result:   3 FAILED ✗
