@@ -42,14 +42,13 @@ export function createForest(canvas, state) {
   }
 
   // ヒットテスト: ノード(最前面・深さ優先) > 幹
+  // 位置は描画位置(display)で判定 — ゆらぎ/drift中でもタップが合う
   function hitTest(sx, sy) {
     const w = screenToWorld(sx, sy);
     const trees = state.trees || [];
-    // ノード(deeperが優先、自分の樹だけ編集対象として返す — 他人はreadonly)
     for (let i = trees.length - 1; i >= 0; i--) {
       const t = trees[i];
       const nodes = t.nodes || [];
-      // 深い順
       const sorted = nodes.slice().sort((a, b) => (b._depth || 0) - (a._depth || 0));
       for (const n of sorted) {
         if (n._x == null) continue;
@@ -60,10 +59,12 @@ export function createForest(canvas, state) {
         }
       }
     }
-    // 幹
+    // 幹 — display位置で判定
     for (let i = trees.length - 1; i >= 0; i--) {
       const t = trees[i];
-      const dx = w.x - t.x, dy = w.y - t.y;
+      const tx = t._displayX ?? t.x;
+      const ty = t._displayY ?? t.y;
+      const dx = w.x - tx, dy = w.y - ty;
       const r = (t._trunkR || 28);
       if (dx*dx + dy*dy <= r*r) {
         return { type: 'trunk', tree: t };
@@ -83,6 +84,12 @@ export function createForest(canvas, state) {
         drag.mode = 'drag-tree';
         drag.origX = hit.tree.x;
         drag.origY = hit.tree.y;
+        hit.tree._dragging = true;
+        // driftを消してdragで位置を直接固定
+        hit.tree._driftX = 0;
+        hit.tree._driftY = 0;
+        hit.tree._windX = 0;
+        hit.tree._windY = 0;
       } else if (hit.type === 'node') {
         drag.mode = 'drag-node';
         drag.origOffX = hit.node.offset_x != null
@@ -125,6 +132,9 @@ export function createForest(canvas, state) {
     const d = drag;
     drag = null;
 
+    if (d.mode === 'drag-tree' && d.hit?.tree) {
+      d.hit.tree._dragging = false;
+    }
     if (d.moved > 6) {
       if (d.mode === 'drag-tree' && state.onTreeMoved) state.onTreeMoved(d.hit.tree);
       else if (d.mode === 'drag-node' && state.onNodeMoved) state.onNodeMoved(d.hit.tree, d.hit.node);
@@ -169,7 +179,11 @@ export function createForest(canvas, state) {
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
     (state.trees || []).forEach(t => {
-      drawTree(ctx, t, t.x, t.y, 1.0, { isSelf: t.id === state.selfTreeId });
+      // liveforest が _displayX/_displayY/_displayScale をセットしていればそれを使用
+      const dx = t._displayX ?? t.x;
+      const dy = t._displayY ?? t.y;
+      const ds = t._displayScale ?? 1.0;
+      drawTree(ctx, t, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
     });
     ctx.restore();
   }

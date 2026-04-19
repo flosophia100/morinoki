@@ -63,6 +63,8 @@ async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
   const { openPlantModal, renderInfoPanel } = await import('./editor.js');
   const { loadSession, isTokenExpired, clearSession } = await import('./auth.js');
+  const { subscribeRoom, debounce } = await import('./realtime.js');
+  const { LiveForest } = await import('./liveforest.js');
 
   const slug = location.pathname.match(/\/r\/([^\/]+)/)?.[1] || new URLSearchParams(location.search).get('slug');
   if (!slug) { alert('ルームが指定されていません'); return; }
@@ -152,6 +154,42 @@ async function initRoom() {
   updatePanel();
   updatePlantBtn();
   forest.render();
+
+  // ===== Phase 2: 生きている森 =====
+  const treeIdsRef = new Set((state.trees || []).map(t => t.id));
+  const live = new LiveForest(() => state.trees, () => forest.render());
+  live.notifyDataChanged();
+  live.start();
+
+  // Realtime購読: 他ユーザーの変更を検知 → reload
+  const onRealtime = debounce(async ({ source, payload }) => {
+    try {
+      await reload();
+      // 新しい tree_id を treeIdsRef に反映
+      treeIdsRef.clear();
+      (state.trees || []).forEach(t => treeIdsRef.add(t.id));
+      // 選択中のtree/nodeが削除された場合はselectionクリア
+      if (state.selection?.kind === 'tree') {
+        const stillExists = state.trees.find(t => t.id === state.selection.tree.id);
+        if (!stillExists) state.selection = null;
+        else state.selection.tree = stillExists;
+      } else if (state.selection?.kind === 'node') {
+        const tree = state.trees.find(t => t.id === state.selection.tree.id);
+        const node = tree?.nodes?.find(n => n.id === state.selection.node.id);
+        if (!node) state.selection = tree ? { kind: 'tree', tree } : null;
+        else { state.selection.tree = tree; state.selection.node = node; }
+      }
+      live.notifyDataChanged();
+      updatePanel();
+      forest.render();
+    } catch (e) { console.error('realtime reload', e); }
+  }, 500);
+  const unsubscribeRealtime = subscribeRoom(state.room.id, treeIdsRef, onRealtime);
+
+  window.addEventListener('beforeunload', () => {
+    live.stop();
+    unsubscribeRealtime && unsubscribeRealtime();
+  });
 
   // ==== canvas クリック ====
   state.onTrunkTap = (tree) => { state.selection = { kind: 'tree', tree }; updatePanel(); forest.render(); };
