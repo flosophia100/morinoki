@@ -80,49 +80,9 @@ export function openRestoreModal(state, onRestored) {
 
 const PALETTE = ['#5a6b3e','#8b6a4a','#c49a3e','#d4694a','#6b4a2b','#3a4828','#b8c18c','#e8a298','#7d8f5a','#a87e55'];
 
-// ===== 植樹モーダル =====
-export function openPlantModal(state, onPlanted) {
-  const m = document.getElementById('plant-modal');
-  const err = document.getElementById('plant-error');
-  const name = document.getElementById('plant-name');
-  const p1 = document.getElementById('plant-pass');
-  const p2 = document.getElementById('plant-pass2');
-  const email = document.getElementById('plant-email');
-  err.classList.add('hidden');
-  name.value = ''; p1.value = ''; p2.value = ''; email.value = '';
-  m.classList.remove('hidden');
-  name.focus();
-  document.getElementById('plant-cancel').onclick = () => m.classList.add('hidden');
-  document.getElementById('plant-submit').onclick = async () => {
-    err.classList.add('hidden');
-    const nm = name.value.trim();
-    if (!nm) return showErr('名前を入力してください');
-    if (p1.value.length < 4) return showErr('合言葉は4桁以上');
-    if (p1.value !== p2.value) return showErr('合言葉が一致しません');
-    try {
-      const res = await api.createTree(state.room.slug, nm, p1.value, email.value.trim() || null);
-      const row = Array.isArray(res) ? res[0] : res;
-      const treeId = row.tree_id;
-      const recovery = row.recovery_key;
-      const token = await api.authTree(treeId, p1.value);
-      saveSession(state.room.slug, { treeId, editToken: token, treeName: nm });
-      m.classList.add('hidden');
-      showRecoveryModal(recovery, () => onPlanted({ treeId, editToken: token, treeName: nm }));
-    } catch (e) { showErr(e.message || String(e)); }
-  };
-  function showErr(msg){ err.textContent = msg; err.classList.remove('hidden'); }
-}
-
-function showRecoveryModal(key, onClose) {
-  const m = document.getElementById('recovery-modal');
-  document.getElementById('recovery-key').textContent = key;
-  m.classList.remove('hidden');
-  document.getElementById('recovery-copy').onclick = async () => {
-    await navigator.clipboard.writeText(key);
-    document.getElementById('recovery-copy').textContent = 'コピーしました';
-  };
-  document.getElementById('recovery-ok').onclick = () => { m.classList.add('hidden'); onClose && onClose(); };
-}
+// 植樹モーダルは廃止(panel内 auth フォームに統合)
+// 互換: 呼ばれても何もしない(既存importエラー回避)
+export function openPlantModal() { /* removed */ }
 
 // ===== 左常駐パネル =====
 // selection: null | { kind:'tree', tree } | { kind:'node', tree, node }
@@ -159,22 +119,39 @@ export function renderInfoPanel(state, selection, callbacks) {
 // ----- Idle -----
 function idleHTML(state) {
   const hasSession = !!state.session;
+  const sessionName = state.session?.treeName || '';
   return `
     <div class="ip-block">
       <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || '森')}</h2>
       <p class="ip-hint">${(state.trees || []).length} 本の樹</p>
     </div>
-    <div class="ip-block">
-      <p class="ip-desc">
-        森の中で樹・枝先のキーワードをタップすると、ここに詳細が表示されます。
-      </p>
-      ${hasSession
-        ? `<p class="ip-hint">あなたの樹があります。幹または右下「自分の樹」で詳細に戻れます。</p>
-           <button data-action="my-tree" class="btn-secondary w-full">自分の樹</button>
-           <button data-action="logout" class="btn-link">別の人として入り直す</button>`
-        : `<button data-action="plant" class="btn-primary w-full">+ 樹を植える</button>`
-      }
-    </div>
+    ${hasSession ? `
+      <div class="ip-block">
+        <label class="mini-label">ログイン中</label>
+        <p class="ip-login-name"><span class="self-badge">樹</span> ${escapeHtml(sessionName)}</p>
+        <button data-action="my-tree" class="btn-primary w-full">自分の樹へ</button>
+        <button data-action="logout" class="btn-secondary w-full" style="margin-top:0.4rem">ログアウト</button>
+        <p class="ip-hint" style="font-size:0.76rem;margin-top:0.3rem">ログアウトすると別の人として入り直せます</p>
+      </div>
+    ` : `
+      <div class="ip-block ip-auth-form">
+        <label class="mini-label">入る / 植える</label>
+        <p class="ip-desc" style="margin-bottom:0.4rem">
+          初めての方は新しい樹が植わり、名前を使ったことがある人はログインして続きから編集できます。
+        </p>
+        <label class="mini-label">名前</label>
+        <input id="auth-name" type="text" maxlength="20" placeholder="あなたの名前 / ニックネーム" autocomplete="off">
+        <label class="mini-label">合言葉(4〜10桁)</label>
+        <input id="auth-pass" type="password" minlength="4" maxlength="10" autocomplete="off">
+        <details class="ip-details">
+          <summary>メールを登録する(任意・合言葉を忘れた時の復元用)</summary>
+          <label class="mini-label" style="margin-top:0.3rem">メール</label>
+          <input id="auth-email" type="email" autocomplete="off">
+        </details>
+        <button data-action="auth-submit" class="btn-primary w-full" style="margin-top:0.6rem">入る / 植える</button>
+        <p id="auth-error" class="error hidden"></p>
+      </div>
+    `}
     ${(state.trees || []).length > 0 ? `
       <div class="ip-block">
         <label class="mini-label">森の物語</label>
@@ -188,11 +165,31 @@ function idleHTML(state) {
   `;
 }
 function wireIdle(el, state, cb) {
-  el.querySelector('[data-action="plant"]')?.addEventListener('click', () => cb.onPlant && cb.onPlant());
   el.querySelector('[data-action="my-tree"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
   el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
+
+  const submitBtn = el.querySelector('[data-action="auth-submit"]');
+  const err = el.querySelector('#auth-error');
+  function showErr(msg) { if (err) { err.textContent = msg; err.classList.remove('hidden'); } }
+  submitBtn?.addEventListener('click', async () => {
+    err?.classList.add('hidden');
+    const nm = el.querySelector('#auth-name').value.trim();
+    const pw = el.querySelector('#auth-pass').value;
+    const email = el.querySelector('#auth-email')?.value.trim() || null;
+    if (!nm) return showErr('名前を入力してください');
+    if (pw.length < 4) return showErr('合言葉は4桁以上です');
+    try {
+      await cb.onAuthSubmit && cb.onAuthSubmit({ name: nm, passcode: pw, email });
+    } catch (e) {
+      showErr(e.message || '入れませんでした');
+    }
+  });
+  // Enterで送信
+  el.querySelectorAll('#auth-name, #auth-pass, #auth-email').forEach(inp => {
+    inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitBtn?.click(); });
+  });
 }
 
 // ----- 自分の樹(幹タップ) -----

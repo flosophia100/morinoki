@@ -79,19 +79,21 @@ export class LiveForest {
     const trees = this.getTrees();
 
     // 風: 位相ずれでゆらぎ(ドラッグ中の樹はスキップ)
+    // 視認性を上げるため振幅を拡大
     trees.forEach(t => {
       this.ensureInit(t);
       if (t._dragging) { t._windX = 0; t._windY = 0; return; }
       const seed = Number(t.seed) || stringHash(t.name || 'x');
       const pX = (seed % 1009) * 0.01;
       const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
-      const windX = Math.sin(this.t * 0.55 + pX) * 2.4 + Math.sin(this.t * 0.23 + pX * 1.7) * 1.0;
-      const windY = Math.cos(this.t * 0.47 + pY) * 2.0 + Math.cos(this.t * 0.19 + pY * 1.3) * 0.9;
+      const windX = Math.sin(this.t * 0.6 + pX) * 6 + Math.sin(this.t * 0.25 + pX * 1.7) * 2.5;
+      const windY = Math.cos(this.t * 0.52 + pY) * 5 + Math.cos(this.t * 0.21 + pY * 1.3) * 2.2;
       t._windX = windX;
       t._windY = windY;
     });
 
     // 引力: 似た樹ほどターゲット距離が近くなる(ドラッグ中の樹はスキップ)
+    // 強度を約3倍に上げて視認しやすく
     this.similarPairs.forEach(p => {
       if (p.a._dragging || p.b._dragging) return;
       const ax = p.a.x + (p.a._driftX || 0);
@@ -100,19 +102,18 @@ export class LiveForest {
       const by = p.b.y + (p.b._driftY || 0);
       const dx = bx - ax, dy = by - ay;
       const dist = Math.hypot(dx, dy) || 1;
-      // 類似度が高いほど近くなる(200〜400px 範囲)
-      const targetDist = 400 - p.strength * 200;
+      const targetDist = 420 - p.strength * 260;
       const diff = dist - targetDist;
-      if (Math.abs(diff) < 20) return;
-      const pull = Math.max(-3, Math.min(3, (diff / dist) * 0.02 * p.strength));
+      if (Math.abs(diff) < 10) return;
+      const pull = Math.max(-6, Math.min(6, (diff / dist) * 0.06 * p.strength));
       const mx = dx * pull / dist, my = dy * pull / dist;
-      p.a._driftX += mx * 2;
-      p.a._driftY += my * 2;
-      p.b._driftX -= mx * 2;
-      p.b._driftY -= my * 2;
+      p.a._driftX += mx * 4;
+      p.a._driftY += my * 4;
+      p.b._driftX -= mx * 4;
+      p.b._driftY -= my * 4;
     });
 
-    // 斥力(近すぎる樹を押し戻す) — 絡まり防止
+    // 斥力(近すぎる樹を押し戻す) — 絡まり防止。強めに
     for (let i = 0; i < trees.length; i++) {
       for (let j = i + 1; j < trees.length; j++) {
         const A = trees[i], B = trees[j];
@@ -122,10 +123,10 @@ export class LiveForest {
         const by = B.y + (B._driftY || 0);
         const dx = bx - ax, dy = by - ay;
         const d2 = dx*dx + dy*dy;
-        const min = 180;
+        const min = 220;
         if (d2 < min*min && d2 > 1) {
           const d = Math.sqrt(d2);
-          const push = (min - d) * 0.05 / d;
+          const push = (min - d) * 0.12 / d;
           A._driftX -= dx * push;
           A._driftY -= dy * push;
           B._driftX += dx * push;
@@ -134,10 +135,10 @@ export class LiveForest {
       }
     }
 
-    // driftにdampingを効かせて暴れを抑える
+    // driftにdampingを効かせて暴れを抑える(緩やかに)
     trees.forEach(t => {
-      t._driftX *= 0.995;
-      t._driftY *= 0.995;
+      t._driftX *= 0.992;
+      t._driftY *= 0.992;
       const maxDrift = 260;
       if (t._driftX > maxDrift) t._driftX = maxDrift;
       if (t._driftX < -maxDrift) t._driftX = -maxDrift;

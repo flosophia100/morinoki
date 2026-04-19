@@ -33,6 +33,8 @@ export const api = {
     rpc('create_tree', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
   authTree: (treeId, secret) =>
     rpc('auth_tree', { p_tree_id: treeId, p_secret: secret }),
+  plantOrLogin: (roomSlug, name, passcode, email) =>
+    rpc('plant_or_login', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
   upsertNode: (token, treeId, node) => {
     const args = {
       p_edit_token: token, p_tree_id: treeId,

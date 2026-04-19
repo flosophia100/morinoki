@@ -35,26 +35,6 @@ window.SUPABASE_CONFIG = {
   <canvas id="forest-canvas"></canvas>
 </div>
 
-<footer class="room-footer">
-  <button id="plant-btn" class="btn-plant" data-mode="plant">+ 樹を植える</button>
-</footer>
-
-<!-- 植樹モーダル(フローティング) -->
-<div id="plant-modal" class="modal hidden">
-  <div class="modal-panel">
-    <h2>樹を植える</h2>
-    <label>名前 <input id="plant-name" type="text" maxlength="20" required></label>
-    <label>合言葉(4〜10桁) <input id="plant-pass" type="password" minlength="4" maxlength="10" required></label>
-    <label>合言葉(確認) <input id="plant-pass2" type="password" minlength="4" maxlength="10" required></label>
-    <label>メール(任意・復元用) <input id="plant-email" type="email"></label>
-    <div class="modal-actions">
-      <button id="plant-cancel" class="btn-secondary">キャンセル</button>
-      <button id="plant-submit" class="btn-primary">植える</button>
-    </div>
-    <p id="plant-error" class="error hidden"></p>
-  </div>
-</div>
-
 <!-- 共有モーダル -->
 <div id="share-modal" class="modal hidden">
   <div class="modal-panel">

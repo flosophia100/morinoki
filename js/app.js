@@ -120,12 +120,12 @@ async function initRoom() {
       forest.render();
     },
     onLogout: () => {
-      if (!confirm('session切替: あなたの編集権限を端末から消します(復元キーと合言葉があれば後から再認証可能)')) return;
       clearSession(slug);
       state.session = null;
       state.selfTreeId = null;
       state.selection = null;
       updatePanel(); updatePlantBtn(); forest.render();
+      showToast('ログアウトしました', 'success');
     },
     onRerender: () => { updatePanel(); forest.render(); },
     onExportCsv: () => {
@@ -133,6 +133,35 @@ async function initRoom() {
       catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
     },
     onTimelapse: () => startTimelapse(),
+    onAuthSubmit: async ({ name, passcode, email }) => {
+      const res = await api.plantOrLogin(state.room.slug, name, passcode, email);
+      const row = Array.isArray(res) ? res[0] : res;
+      const isPlanted = row.kind === 'planted';
+      state.session = { treeId: row.tree_id, editToken: row.edit_token, treeName: name };
+      const { saveSession } = await import('./auth.js');
+      saveSession(slug, state.session);
+      state.selfTreeId = row.tree_id;
+      await reload();
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) state.selection = { kind: 'tree', tree: mine };
+      live.notifyDataChanged();
+      updatePanel();
+      forest.render();
+      if (isPlanted && row.recovery_key) {
+        // 復元キー表示モーダル(植樹直後のみ)
+        const m = document.getElementById('recovery-modal');
+        document.getElementById('recovery-key').textContent = row.recovery_key;
+        m.classList.remove('hidden');
+        document.getElementById('recovery-copy').onclick = async () => {
+          await navigator.clipboard.writeText(row.recovery_key);
+          document.getElementById('recovery-copy').textContent = 'コピーしました';
+        };
+        document.getElementById('recovery-ok').onclick = () => m.classList.add('hidden');
+        showToast('森に樹を植えました', 'success');
+      } else {
+        showToast('ログインしました', 'success');
+      }
+    },
     onSelectNode: (tree, node) => {
       state.selection = { kind: 'node', tree, node };
       updatePanel(); forest.render();
@@ -146,17 +175,7 @@ async function initRoom() {
   function updatePanel() {
     renderInfoPanel(state, state.selection, panelCallbacks);
   }
-  function updatePlantBtn() {
-    const btn = document.getElementById('plant-btn');
-    if (!btn) return;
-    if (state.session) {
-      btn.textContent = '自分の樹';
-      btn.dataset.mode = 'self';
-    } else {
-      btn.textContent = '+ 樹を植える';
-      btn.dataset.mode = 'plant';
-    }
-  }
+  function updatePlantBtn() { /* plant-btn removed in favor of panel-in auth */ }
   function centerOn(tree) {
     const rect = canvas.getBoundingClientRect();
     state.view = { ox: rect.width / 2 - tree.x * state.view.scale, oy: rect.height / 2 - tree.y * state.view.scale, scale: state.view.scale };
@@ -259,30 +278,6 @@ async function initRoom() {
       forest.render();
     } catch (e) { showError(e, 'ノードの移動を保存できませんでした'); }
   };
-
-  // ==== 植樹ボタン ====
-  function openPlanting() {
-    if (state.session) {
-      // 一人一樹制約: 自分の樹にフォーカス
-      const mine = state.trees.find(t => t.id === state.selfTreeId);
-      if (mine) {
-        state.selection = { kind: 'tree', tree: mine };
-        centerOn(mine);
-        updatePanel(); forest.render();
-      }
-      return;
-    }
-    openPlantModal(state, async () => {
-      state.session = loadSession(slug);
-      state.selfTreeId = state.session.treeId;
-      await reload();
-      fitForestToView(canvas, state);
-      const mine = state.trees.find(t => t.id === state.selfTreeId);
-      if (mine) state.selection = { kind: 'tree', tree: mine };
-      updatePanel(); updatePlantBtn(); forest.render();
-    });
-  }
-  document.getElementById('plant-btn').addEventListener('click', openPlanting);
 
   // 共有ボタン
   document.getElementById('share-btn').addEventListener('click', () => {
