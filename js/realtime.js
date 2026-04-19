@@ -7,26 +7,37 @@ export function subscribeRoom(roomId, treeIdsRef, onChange) {
   if (!supabase) { console.warn('[realtime] supabase null'); return () => {}; }
 
   const channel = supabase
-    .channel(`morinoki-room-${roomId}`)
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'trees', filter: `room_id=eq.${roomId}` },
+    .channel(`morinoki-room-${roomId}`, { config: { broadcast: { self: true } } })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trees' },
       (payload) => {
-        console.log('[realtime] tree event:', payload.eventType, payload.new?.name || payload.old?.name);
-        onChange({ source: 'trees', payload });
-      }
-    )
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'nodes' },
+        console.log('[realtime] tree INSERT:', payload.new?.name);
+        if (payload.new?.room_id === roomId) onChange({ source: 'trees', payload });
+      })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'trees' },
       (payload) => {
-        const row = payload.new || payload.old || {};
-        console.log('[realtime] node event:', payload.eventType, 'tree_id=', row.tree_id, 'text=', row.text);
-        if (treeIdsRef.has(row.tree_id)) {
-          onChange({ source: 'nodes', payload });
-        }
-      }
-    )
+        console.log('[realtime] tree UPDATE:', payload.new?.name);
+        if (payload.new?.room_id === roomId) onChange({ source: 'trees', payload });
+      })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'trees' },
+      (payload) => {
+        console.log('[realtime] tree DELETE:', payload.old?.id);
+        if (payload.old?.room_id === roomId) onChange({ source: 'trees', payload });
+      })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'nodes' },
+      (payload) => {
+        console.log('[realtime] node INSERT:', payload.new?.text, 'tree=', payload.new?.tree_id);
+        if (treeIdsRef.has(payload.new?.tree_id)) onChange({ source: 'nodes', payload });
+      })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'nodes' },
+      (payload) => {
+        console.log('[realtime] node UPDATE:', payload.new?.text, 'tree=', payload.new?.tree_id);
+        if (treeIdsRef.has(payload.new?.tree_id)) onChange({ source: 'nodes', payload });
+      })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'nodes' },
+      (payload) => {
+        console.log('[realtime] node DELETE:', payload.old?.id);
+        if (treeIdsRef.has(payload.old?.tree_id)) onChange({ source: 'nodes', payload });
+      })
     .subscribe((status, err) => {
       console.log('[realtime] subscribe status:', status, err?.message || '');
     });
