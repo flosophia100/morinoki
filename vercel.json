@@ -2,7 +2,7 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
-    { "source": "/r/:slug", "destination": "/room.html" },
-    { "source": "/admin5002", "destination": "/admin5002.html" }
+    { "source": "/r/:slug", "destination": "/room" },
+    { "source": "/admin5002", "destination": "/admin5002" }
   ]
 }
