@@ -35,6 +35,8 @@ export const api = {
     rpc('delete_room', { p_admin_token: adminToken, p_slug: slug }),
   listRooms: (adminToken) =>
     rpc('list_rooms', { p_admin_token: adminToken }),
+  adminCreateTree: (adminToken, roomSlug, name) =>
+    rpc('admin_create_tree', { p_admin_token: adminToken, p_room_slug: roomSlug, p_name: name }),
   setAdminCredentials: (currentToken, newLoginId, newPasscode) =>
     rpc('set_admin_credentials', {
       p_current_token: currentToken,

@@ -88,6 +88,15 @@ function idleHTML(state) {
         <a href="/admin5002" class="btn-secondary w-full" style="display:inline-block;text-align:center;text-decoration:none">ダッシュボードへ</a>
         <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
       </div>
+      <div class="ip-block">
+        <label class="mini-label">新しい幹を作る(管理者特権)</label>
+        <p class="ip-desc" style="font-size:0.76rem;margin-bottom:0.4rem">メール認証なしで幹を作成します。ユーザーログインはできません。</p>
+        <div class="ip-row">
+          <input id="admin-tree-name" type="text" maxlength="20" placeholder="幹の名前">
+          <button id="admin-tree-create-btn" class="btn-sm btn-ink">＋作成</button>
+        </div>
+        <p id="admin-tree-error" class="error hidden" style="font-size:0.78rem"></p>
+      </div>
     ` : ''}
     ${!isAdmin ? `
       <div class="ip-block ip-auth-form">
@@ -164,6 +173,19 @@ function wireIdle(el, state, cb) {
 
   // 管理者ログアウト(ログインは /admin5002 でのみ行う)
   el.querySelector('[data-action="admin-logout"]')?.addEventListener('click', () => cb.onAdminLogout && cb.onAdminLogout());
+
+  // 管理者による幹の作成
+  const admTreeBtn = el.querySelector('#admin-tree-create-btn');
+  const admTreeErr = el.querySelector('#admin-tree-error');
+  admTreeBtn?.addEventListener('click', async () => {
+    admTreeErr?.classList.add('hidden');
+    const name = el.querySelector('#admin-tree-name')?.value?.trim();
+    if (!name) { admTreeErr.textContent = '名前を入力してください'; admTreeErr.classList.remove('hidden'); return; }
+    if (!cb.onAdminCreateTree) return;
+    try { await cb.onAdminCreateTree(name); }
+    catch (e) { admTreeErr.textContent = e.message || '作成失敗'; admTreeErr.classList.remove('hidden'); }
+  });
+  el.querySelector('#admin-tree-name')?.addEventListener('keydown', e => { if (e.key === 'Enter') admTreeBtn?.click(); });
 
   // デザインスライダー(管理者のみ存在)
   const sliders = el.querySelectorAll('input[data-design-key]');

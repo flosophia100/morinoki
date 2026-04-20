@@ -146,6 +146,16 @@ async function initRoom() {
       catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
     },
     onTimelapse: () => startTimelapse(),
+    onAdminCreateTree: async (name) => {
+      if (!state.adminToken) throw new Error('管理者でログインしてください');
+      const tree = await api.adminCreateTree(state.adminToken, state.room.slug, name);
+      await reload();
+      const created = state.trees.find(t => t.id === tree.id);
+      if (created) state.selection = { kind: 'tree', tree: created };
+      live.notifyDataChanged();
+      updatePanel(); forest.render();
+      showToast(`幹「${name}」を作成しました`, 'success');
+    },
     onAdminLogout: () => {
       // グローバル管理者ログアウト: localStorageを消して/admin5002へ
       state.adminToken = null;
