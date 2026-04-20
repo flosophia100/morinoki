@@ -1,6 +1,6 @@
 import { api } from './supabase.js';
-import { saveSession, loadSession } from './auth.js';
 import { escapeHtml } from './utils.js';
+import { META as DESIGN_META, DEFAULTS as DESIGN_DEFAULTS } from './designconfig.js';
 
 // ===== CSVエクスポート(主催者向け) =====
 export function exportForestCsv(state) {
@@ -30,59 +30,8 @@ export function exportForestCsv(state) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// ===== 共有モーダル =====
-export function openShareModal(forestUrl) {
-  const m = document.getElementById('share-modal');
-  document.getElementById('share-url').textContent = forestUrl;
-  const qr = document.getElementById('share-qr');
-  qr.innerHTML = `<img alt="QR code" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=${encodeURIComponent(forestUrl)}">`;
-  m.classList.remove('hidden');
-  document.getElementById('share-close').onclick = () => m.classList.add('hidden');
-  const copyBtn = document.getElementById('share-copy');
-  copyBtn.textContent = 'URLをコピー';
-  copyBtn.onclick = async () => {
-    try { await navigator.clipboard.writeText(forestUrl); copyBtn.textContent = 'コピーしました'; }
-    catch { copyBtn.textContent = 'コピーできませんでした'; }
-  };
-}
-
-// ===== 復元モーダル =====
-export function openRestoreModal(state, onRestored) {
-  const m = document.getElementById('restore-modal');
-  const err = document.getElementById('restore-error');
-  const nameInput = document.getElementById('restore-name');
-  const secretInput = document.getElementById('restore-secret');
-  err.classList.add('hidden');
-  nameInput.value = ''; secretInput.value = '';
-  m.classList.remove('hidden');
-  nameInput.focus();
-
-  document.getElementById('restore-cancel').onclick = () => m.classList.add('hidden');
-  document.getElementById('restore-submit').onclick = async () => {
-    err.classList.add('hidden');
-    const nm = nameInput.value.trim();
-    const secret = secretInput.value.trim();
-    if (!nm || !secret) return showErr('名前と合言葉(または復元キー)を入力してください');
-    // 同名の木を探す(ルーム内)
-    const candidate = (state.trees || []).find(t => t.name === nm);
-    if (!candidate) return showErr(`「${nm}」という名前の樹がこの森にありません`);
-    try {
-      const token = await api.authTree(candidate.id, secret);
-      saveSession(state.room.slug, { treeId: candidate.id, editToken: token, treeName: nm });
-      m.classList.add('hidden');
-      onRestored && onRestored({ treeId: candidate.id, editToken: token, treeName: nm });
-    } catch (e) {
-      showErr('認証に失敗しました: ' + (e.message || ''));
-    }
-  };
-  function showErr(msg){ err.textContent = msg; err.classList.remove('hidden'); }
-}
-
-const PALETTE = ['#5a6b3e','#8b6a4a','#c49a3e','#d4694a','#6b4a2b','#3a4828','#b8c18c','#e8a298','#7d8f5a','#a87e55'];
-
-// 植樹モーダルは廃止(panel内 auth フォームに統合)
-// 互換: 呼ばれても何もしない(既存importエラー回避)
-export function openPlantModal() { /* removed */ }
+// Nordic色調のパレット(fjord sage / slate blue / amber / terracotta / birch)
+const PALETTE = ['#6f8a7d','#7d98a8','#c89566','#b0624a','#9d8972','#435e52','#a7bcad','#e3c2b3','#8ea0a8','#b09d84'];
 
 // ===== 左常駐パネル =====
 // selection: null | { kind:'tree', tree } | { kind:'node', tree, node }
@@ -90,6 +39,12 @@ export function renderInfoPanel(state, selection, callbacks) {
   const el = document.getElementById('info-content');
   // admin モードなら 全樹を "自分の樹扱い" で編集UI表示
   const isSelfTree = (tree) => !!state.adminToken || (!!state.session && tree.id === state.selfTreeId);
+
+  // ログイン済ならタイトル画面ではなく常に自分の樹を表示(未選択時のデフォルト)
+  if (!selection && state.session) {
+    const mine = (state.trees || []).find(t => t.id === state.selfTreeId);
+    if (mine) selection = { kind: 'tree', tree: mine };
+  }
 
   if (!selection) {
     el.innerHTML = idleHTML(state);
@@ -117,15 +72,14 @@ export function renderInfoPanel(state, selection, callbacks) {
   }
 }
 
-// ----- Idle -----
+// ----- Idle(未ログイン/タイトル画面) -----
 function idleHTML(state) {
-  const hasSession = !!state.session;
   const isAdmin = !!state.adminToken;
-  const sessionName = state.session?.treeName || '';
   const adminMode = state.isAdminMode;
+  const tab = state.authTab || 'login'; // 'login' | 'new'
   return `
     <div class="ip-block">
-      <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || '森')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
+      <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || 'morinokki')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
       <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
     </div>
     ${adminMode && !isAdmin ? `
@@ -147,33 +101,55 @@ function idleHTML(state) {
         <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
       </div>
     ` : ''}
-    ${(!adminMode && hasSession) ? `
-      <div class="ip-block">
-        <label class="mini-label">ログイン中</label>
-        <p class="ip-login-name"><span class="self-badge">樹</span> ${escapeHtml(sessionName)}</p>
-        <button data-action="my-tree" class="btn-primary w-full">自分の樹へ</button>
-        <button data-action="logout" class="btn-secondary w-full" style="margin-top:0.4rem">ログアウト</button>
-        <p class="ip-hint" style="font-size:0.76rem;margin-top:0.3rem">ログアウトすると別の人として入り直せます</p>
-      </div>
-    ` : (!adminMode ? `
+    ${!adminMode ? `
       <div class="ip-block ip-auth-form">
-        <label class="mini-label">入る / 植える</label>
-        <p class="ip-desc" style="margin-bottom:0.4rem">
-          初めての方は新しい樹が植わり、名前を使ったことがある人はログインして続きから編集できます。
-        </p>
-        <label class="mini-label">名前</label>
-        <input id="auth-name" type="text" maxlength="20" placeholder="あなたの名前 / ニックネーム" autocomplete="off">
-        <label class="mini-label">合言葉 または 復元キー</label>
-        <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉(4桁〜)か復元キー">
-        <details class="ip-details">
-          <summary>メールを登録する(任意・合言葉を忘れた時の復元用)</summary>
-          <label class="mini-label" style="margin-top:0.3rem">メール</label>
-          <input id="auth-email" type="email" autocomplete="off">
-        </details>
-        <button data-action="auth-submit" class="btn-primary w-full" style="margin-top:0.6rem">入る / 植える</button>
-        <p id="auth-error" class="error hidden"></p>
+        <div class="auth-tabs">
+          <button data-auth-tab="login" class="auth-tab ${tab==='login'?'on':''}">ログイン</button>
+          <button data-auth-tab="new" class="auth-tab ${tab==='new'?'on':''}">新しく植える</button>
+        </div>
+        ${tab === 'login' ? `
+          <p class="ip-desc" style="margin-bottom:0.4rem">前に登録した名前と合言葉で入ります。</p>
+          <label class="mini-label">名前</label>
+          <input id="auth-name" type="text" maxlength="20" placeholder="登録した名前" autocomplete="off">
+          <label class="mini-label">合言葉 または 復元キー</label>
+          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉または復元キー">
+          <button data-action="auth-login" class="btn-primary w-full" style="margin-top:0.6rem">ログイン</button>
+          <p class="ip-hint" style="font-size:0.74rem;margin-top:0.5rem">
+            合言葉を忘れた方は
+            <button data-action="forgot-pass" class="btn-link">メールで再設定</button>
+            (メール登録済みの方)
+          </p>
+          <p id="auth-error" class="error hidden"></p>
+        ` : `
+          <p class="ip-desc" style="margin-bottom:0.4rem">この森に新しい樹を植えます。名前は後から変更できません。確認メールのリンクで本登録を完了します。</p>
+          <label class="mini-label">名前</label>
+          <input id="auth-name" type="text" maxlength="20" placeholder="あなたの名前 / ニックネーム" autocomplete="off">
+          <label class="mini-label">合言葉(4桁以上)</label>
+          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉">
+          <label class="mini-label">メール(必須)</label>
+          <input id="auth-email" type="email" autocomplete="off" placeholder="you@example.com" required>
+          <button data-action="auth-plant" class="btn-primary w-full" style="margin-top:0.6rem">登録メールを送る</button>
+          <p id="auth-error" class="error hidden"></p>
+          <p id="auth-pending" class="ip-hint hidden" style="font-size:0.8rem;margin-top:0.4rem;color:var(--moss-deep)"></p>
+        `}
       </div>
-    ` : '')}
+    ` : ''}
+    ${isAdmin ? `
+      <div class="ip-block ip-design">
+        <label class="mini-label">樹のデザイン(管理者のみ)</label>
+        <p class="ip-desc" style="margin-bottom:0.4rem">スライダーを動かすと、すべての樹の見た目が変わります。</p>
+        ${DESIGN_META.map(m => {
+          const v = state.design?.[m.key] ?? DESIGN_DEFAULTS[m.key];
+          return `
+            <div class="design-row">
+              <label for="ds-${m.key}" class="design-label">${escapeHtml(m.label)}</label>
+              <input id="ds-${m.key}" data-design-key="${m.key}" type="range" min="0" max="1" step="0.01" value="${v}">
+            </div>
+          `;
+        }).join('')}
+        <button data-action="design-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
+      </div>
+    ` : ''}
     ${(isAdmin && (state.trees || []).length > 0) ? `
       <div class="ip-block">
         <label class="mini-label">森の物語(管理者のみ)</label>
@@ -187,10 +163,16 @@ function idleHTML(state) {
   `;
 }
 function wireIdle(el, state, cb) {
-  el.querySelector('[data-action="my-tree"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
-  el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
   el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
+
+  // タブ切替(ログイン ↔ 新規作成)
+  el.querySelectorAll('[data-auth-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.authTab = btn.dataset.authTab;
+      cb.onRerender && cb.onRerender();
+    });
+  });
 
   // 管理者ログイン
   const adminBtn = el.querySelector('[data-action="admin-login"]');
@@ -207,40 +189,102 @@ function wireIdle(el, state, cb) {
   el.querySelector('[data-action="admin-change-pw"]')?.addEventListener('click', () => cb.onAdminChangePw && cb.onAdminChangePw());
   el.querySelector('#admin-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') adminBtn?.click(); });
 
-  const submitBtn = el.querySelector('[data-action="auth-submit"]');
+  // デザインスライダー(管理者のみ存在)
+  const sliders = el.querySelectorAll('input[data-design-key]');
+  if (sliders.length) {
+    let tSave = null;
+    const saveSoon = () => {
+      clearTimeout(tSave);
+      tSave = setTimeout(() => cb.onDesignChange && cb.onDesignChange({ ...state.design }), 350);
+    };
+    sliders.forEach(s => {
+      s.addEventListener('input', () => {
+        const k = s.dataset.designKey;
+        const v = Number(s.value);
+        if (!Number.isFinite(v)) return;
+        state.design = { ...(state.design || {}), [k]: v };
+        // 即時にpreviewだけ反映(サーバ保存はdebounce)
+        cb.onDesignPreview && cb.onDesignPreview(state.design);
+        saveSoon();
+      });
+    });
+    el.querySelector('[data-action="design-reset"]')?.addEventListener('click', () => {
+      state.design = { ...DESIGN_DEFAULTS };
+      sliders.forEach(s => { s.value = state.design[s.dataset.designKey]; });
+      cb.onDesignPreview && cb.onDesignPreview(state.design);
+      cb.onDesignChange && cb.onDesignChange({ ...state.design });
+    });
+  }
+
   const err = el.querySelector('#auth-error');
   function showErr(msg) { if (err) { err.textContent = msg; err.classList.remove('hidden'); } }
-  submitBtn?.addEventListener('click', async () => {
+
+  const loginBtn = el.querySelector('[data-action="auth-login"]');
+  loginBtn?.addEventListener('click', async () => {
     err?.classList.add('hidden');
     const nm = el.querySelector('#auth-name').value.trim();
     const pw = el.querySelector('#auth-pass').value;
-    const email = el.querySelector('#auth-email')?.value.trim() || null;
     if (!nm) return showErr('名前を入力してください');
-    if (pw.length < 4) return showErr('合言葉は4桁以上です');
-    if (!cb.onAuthSubmit) return;
-    try {
-      // ★ `await X && Y` は (await X) && Y と解釈されるため括弧必須
-      await cb.onAuthSubmit({ name: nm, passcode: pw, email });
-    } catch (e) {
-      showErr(e.message || '入れませんでした');
-    }
+    if (pw.length < 4) return showErr('合言葉または復元キーを入力してください');
+    if (!cb.onAuthLogin) return;
+    try { await cb.onAuthLogin({ name: nm, passcode: pw }); }
+    catch (e) { showErr(e.message || 'ログインできませんでした'); }
   });
-  // Enterで送信
+
+  const plantBtn = el.querySelector('[data-action="auth-plant"]');
+  plantBtn?.addEventListener('click', async () => {
+    err?.classList.add('hidden');
+    const pending = el.querySelector('#auth-pending');
+    pending?.classList.add('hidden');
+    const nm = el.querySelector('#auth-name').value.trim();
+    const pw = el.querySelector('#auth-pass').value;
+    const email = el.querySelector('#auth-email')?.value.trim() || '';
+    if (!nm) return showErr('名前を入力してください');
+    if (pw.length < 4) return showErr('合言葉は4桁以上にしてください');
+    if (!email || !email.includes('@')) return showErr('メールアドレスを入力してください(本登録に必要です)');
+    if (!cb.onAuthPlant) return;
+    try {
+      const result = await cb.onAuthPlant({ name: nm, passcode: pw, email });
+      // 仮登録成功: メール案内を表示しフォームはそのまま残す
+      if (result?.pending) {
+        if (pending) {
+          pending.textContent = `「${email}」に確認メールを送りました。届いたリンクをクリックして本登録を完了してください。`;
+          pending.classList.remove('hidden');
+        }
+        plantBtn.disabled = true;
+        plantBtn.textContent = '送信済み';
+      }
+    }
+    catch (e) { showErr(e.message || '登録できませんでした'); }
+  });
+
+  el.querySelector('[data-action="forgot-pass"]')?.addEventListener('click', async () => {
+    err?.classList.add('hidden');
+    const nm = el.querySelector('#auth-name').value.trim();
+    if (!nm) return showErr('先に名前を入力してください');
+    if (!cb.onForgotPass) return;
+    try { await cb.onForgotPass({ name: nm }); }
+    catch (e) { showErr(e.message || 'メール送信できませんでした'); }
+  });
+
+  // Enterで送信(どちらのタブでも)
   el.querySelectorAll('#auth-name, #auth-pass, #auth-email').forEach(inp => {
-    inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitBtn?.click(); });
+    inp?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      (loginBtn || plantBtn)?.click();
+    });
   });
 }
 
 // ----- 自分の樹(幹タップ) -----
 function ownTreeHTML(tree) {
   const topLevel = (tree.nodes || []).filter(n => !n.parent_id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  const email = tree.recovery_email || '';
   return `
     <div class="ip-block">
-      <p class="ip-back-link"><button data-action="to-idle" class="btn-link">← 森へ戻る</button></p>
       <div class="ip-head">
         <span class="self-badge">自分の樹</span>
         <h2 class="ip-title">${escapeHtml(tree.name)}</h2>
-        <p class="ip-hint">${(tree.nodes||[]).length} 個のキーワード</p>
       </div>
     </div>
     <div class="ip-block">
@@ -255,6 +299,20 @@ function ownTreeHTML(tree) {
       ${topLevel.length === 0
         ? '<p class="ip-hint">まだありません</p>'
         : `<ul class="ip-kw-list">${topLevel.map(n => kwItemHTML(tree, n)).join('')}</ul>`}
+    </div>
+    <details class="ip-block">
+      <summary class="mini-label" style="cursor:pointer">合言葉・メールを変える</summary>
+      <div style="margin-top:0.5rem">
+        <label class="mini-label">新しい合言葉(4桁以上・変えない場合は空欄)</label>
+        <input id="cr-pass" type="password" minlength="4" maxlength="40" autocomplete="new-password" placeholder="空欄なら変更しません">
+        <label class="mini-label">メール(空欄でメール解除)</label>
+        <input id="cr-email" type="email" autocomplete="off" value="${escapeHtml(email)}" placeholder="you@example.com">
+        <button id="cr-save" class="btn-primary w-full" style="margin-top:0.5rem">保存</button>
+        <p id="cr-msg" class="ip-hint" style="font-size:0.74rem;margin-top:0.3rem"></p>
+      </div>
+    </details>
+    <div class="ip-block">
+      <button data-action="logout" class="btn-secondary w-full">ログアウト</button>
     </div>
   `;
 }
@@ -272,7 +330,28 @@ function kwItemHTML(tree, node) {
   `;
 }
 function wireOwnTree(el, state, tree, cb) {
-  el.querySelector('[data-action="to-idle"]')?.addEventListener('click', () => cb.onIdle && cb.onIdle());
+  el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
+
+  // 合言葉・メール変更
+  const crBtn = el.querySelector('#cr-save');
+  crBtn?.addEventListener('click', async () => {
+    const msg = el.querySelector('#cr-msg');
+    const pw = el.querySelector('#cr-pass').value;
+    const emailRaw = el.querySelector('#cr-email').value.trim();
+    if (pw && pw.length < 4) { if (msg) msg.textContent = '合言葉は4桁以上にしてください'; return; }
+    if (!cb.onUpdateCredentials) return;
+    try {
+      await cb.onUpdateCredentials({
+        newPasscode: pw || null,
+        newEmail: emailRaw === '' ? '' : emailRaw, // 空=解除、nullの時は無変更
+      });
+      if (msg) msg.textContent = '保存しました';
+      el.querySelector('#cr-pass').value = '';
+    } catch (e) {
+      if (msg) msg.textContent = '保存失敗: ' + (e.message || '');
+    }
+  });
+
   const input = el.querySelector('#ip-add-input');
   const btn = el.querySelector('#ip-add-btn');
   async function addOne() {
@@ -323,7 +402,7 @@ function otherTreeHTML(tree, state) {
 
   return `
     <div class="ip-block">
-      <p class="ip-back-link"><button data-action="to-idle" class="btn-link">← 森へ戻る</button></p>
+      <p class="ip-back-link"><button data-action="to-self" class="btn-link">← 自分の樹へ</button></p>
       <div class="ip-head">
         <h2 class="ip-title">${escapeHtml(tree.name)} さん</h2>
         <p class="ip-hint">${(tree.nodes||[]).length} 個のキーワード${dateStr}</p>
@@ -345,9 +424,8 @@ function otherTreeHTML(tree, state) {
       <div class="ip-block">
         <label class="mini-label">近くにいる樹</label>
         <ul class="ip-near-list">
-          ${near.map(n => `<li data-tree-id="${n.tree.id}"><span class="dot-sm" style="background:${n.tree.id === state?.selfTreeId ? '#c49a3e' : '#6b4a2b'}"></span>${escapeHtml(n.tree.name)}${n.tree.id === state?.selfTreeId ? ' (あなた)' : ''}<span class="sim-hint">類似 ${Math.round(n.sim * 100)}%</span></li>`).join('')}
+          ${near.map(n => `<li data-tree-id="${n.tree.id}"><span class="dot-sm" style="background:${n.tree.id === state?.selfTreeId ? '#c49a3e' : '#6b4a2b'}"></span>${escapeHtml(n.tree.name)}${n.tree.id === state?.selfTreeId ? ' (あなた)' : ''}</li>`).join('')}
         </ul>
-        <button data-action="walk" class="btn-secondary w-full" style="margin-top:0.5rem">散歩 — 近くの樹へ進む</button>
       </div>
     ` : ''}
   `;
@@ -410,7 +488,7 @@ function kwItemReadHTML(tree, node) {
   `;
 }
 function wireOtherTree(el, state, tree, cb) {
-  el.querySelector('[data-action="to-idle"]')?.addEventListener('click', () => cb.onIdle && cb.onIdle());
+  el.querySelector('[data-action="to-self"]')?.addEventListener('click', () => cb.onFocusSelf && cb.onFocusSelf());
   el.querySelectorAll('.ip-kw, .ip-sub-item').forEach(li => {
     li.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -426,15 +504,6 @@ function wireOtherTree(el, state, tree, cb) {
       const t = (state.trees || []).find(x => x.id === tid);
       if (t && cb.onSelectTree) cb.onSelectTree(t);
     });
-  });
-  // 散歩: 一番類似度が高い他人の樹へ自動遷移
-  el.querySelector('[data-action="walk"]')?.addEventListener('click', () => {
-    const near = findNearbyTrees(tree, state.trees || [], 5)
-      .filter(n => n.tree.id !== tree.id && n.tree.id !== state.selfTreeId);
-    // 類似度ベースで最も高いもの(距離ではなく)
-    near.sort((a, b) => b.sim - a.sim);
-    const next = near[0]?.tree;
-    if (next && cb.onSelectTree) cb.onSelectTree(next);
   });
 }
 

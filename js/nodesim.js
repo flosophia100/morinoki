@@ -19,7 +19,9 @@ const CFG = {
   MAX_V: 8,
 };
 
-export function tickNodeSim(trees, t) {
+export function tickNodeSim(trees, t, design = null) {
+  // design.nodeShimmer: 0..1 → 風のamp倍率 0..2(0.5中立で1.0)
+  const windMul = design ? (design.nodeShimmer * 2.0) : 1.0;
   // 全ノードを集める
   const all = [];
   trees.forEach(tree => {
@@ -71,8 +73,8 @@ export function tickNodeSim(trees, t) {
     if (n._dragging) continue;
     const seed = (n.id && n.id.charCodeAt ? n.id.charCodeAt(0) : 0) + (n.text?.length || 0);
     const ph = seed * 0.17;
-    const wx = Math.sin(t * 0.95 + ph) * CFG.WIND_AMP + Math.sin(t * 0.32 + ph * 2.1) * CFG.WIND_AMP * 0.5;
-    const wy = Math.cos(t * 0.82 + ph * 1.3) * CFG.WIND_AMP + Math.cos(t * 0.27 + ph) * CFG.WIND_AMP * 0.5;
+    const wx = (Math.sin(t * 0.95 + ph) * CFG.WIND_AMP + Math.sin(t * 0.32 + ph * 2.1) * CFG.WIND_AMP * 0.5) * windMul;
+    const wy = (Math.cos(t * 0.82 + ph * 1.3) * CFG.WIND_AMP + Math.cos(t * 0.27 + ph) * CFG.WIND_AMP * 0.5) * windMul;
     n.vx += wx * 0.06;
     n.vy += wy * 0.06;
   }

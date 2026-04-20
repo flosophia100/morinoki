@@ -1,5 +1,6 @@
 import { api } from './supabase.js';
 import { isValidSlug, randomSlug } from './utils.js';
+import { mergeDesign } from './designconfig.js';
 
 const isIndex = document.body.classList.contains('page-index');
 const isRoom = document.body.classList.contains('page-room');
@@ -61,7 +62,7 @@ function initIndex() {
 
 async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
-  const { openPlantModal, renderInfoPanel, openShareModal, openRestoreModal, exportForestCsv } = await import('./editor.js');
+  const { renderInfoPanel, exportForestCsv } = await import('./editor.js');
   const { loadSession, isTokenExpired, clearSession } = await import('./auth.js');
   const { subscribeRoom, debounce } = await import('./realtime.js');
   const { LiveForest } = await import('./liveforest.js');
@@ -86,6 +87,7 @@ async function initRoom() {
     view: null,
     selection: null,
     atmo: atmosphereAt(),
+    design: mergeDesign(null),
   };
   // 既存 admin token を復元
   const ADMIN_KEY = 'mori.admin.' + slug;
@@ -98,8 +100,44 @@ async function initRoom() {
     t.showError('森が見つかりません: ' + slug);
     return;
   }
+  state.design = mergeDesign(state.room?.design);
 
-  document.getElementById('forest-name').textContent = state.room.name || state.room.slug;
+  // メール認証リンクから来た場合: ?verify=<token> を処理
+  const verifyToken = new URLSearchParams(location.search).get('verify');
+  if (verifyToken) {
+    try {
+      const res = await api.verifyRegistration(verifyToken);
+      const row = Array.isArray(res) ? res[0] : res;
+      const { saveSession } = await import('./auth.js');
+      state.session = { treeId: row.tree_id, editToken: row.edit_token, treeName: row.name };
+      saveSession(slug, state.session);
+      state.selfTreeId = row.tree_id;
+      // 復元キーを一度だけ表示
+      const m = document.getElementById('recovery-modal');
+      if (m && row.recovery_key) {
+        document.getElementById('recovery-key').textContent = row.recovery_key;
+        m.classList.remove('hidden');
+        document.getElementById('recovery-copy').onclick = async () => {
+          await navigator.clipboard.writeText(row.recovery_key);
+          document.getElementById('recovery-copy').textContent = 'コピーしました';
+        };
+        document.getElementById('recovery-ok').onclick = () => m.classList.add('hidden');
+      }
+      const { showToast } = await import('./toast.js');
+      showToast('本登録が完了しました', 'success');
+    } catch (e) {
+      const { showError } = await import('./toast.js');
+      showError(e, '本登録に失敗しました');
+    }
+    // URLから?verifyを除去(リロードで再実行しない)
+    const url = new URL(location.href);
+    url.searchParams.delete('verify');
+    history.replaceState(null, '', url.toString());
+  }
+
+  const roomLabel = state.room.name || state.room.slug;
+  document.getElementById('forest-name').textContent = roomLabel;
+  document.title = `${roomLabel} — morinokki`;
 
   const sess = loadSession(slug);
   if (sess && !isTokenExpired(sess.editToken)) {
@@ -117,7 +155,6 @@ async function initRoom() {
   // ==== コールバック群(先に定義 — updatePanelから参照される) ====
   const panelCallbacks = {
     onIdle: () => { state.selection = null; updatePanel(); forest.render(); },
-    onPlant: () => openPlanting(),
     onFocusSelf: () => {
       const mine = state.trees.find(t => t.id === state.selfTreeId);
       if (mine) {
@@ -154,6 +191,17 @@ async function initRoom() {
       updatePanel(); forest.render();
       showToast('管理者ログアウト', 'success');
     },
+    onDesignPreview: (nextDesign) => {
+      state.design = mergeDesign(nextDesign);
+      forest.render();
+    },
+    onDesignChange: async (nextDesign) => {
+      state.design = mergeDesign(nextDesign);
+      forest.render();
+      if (!state.adminToken) return;
+      try { await api.setRoomDesign(state.adminToken, state.design); }
+      catch (e) { showError(e, 'デザイン保存に失敗しました'); }
+    },
     onAdminChangePw: async () => {
       const cur = prompt('現在の管理者合言葉(既定は admin)');
       if (cur == null) return;
@@ -164,10 +212,9 @@ async function initRoom() {
         showToast('管理者合言葉を変更しました', 'success');
       } catch (e) { showError(e, '変更失敗'); }
     },
-    onAuthSubmit: async ({ name, passcode, email }) => {
-      const res = await api.plantOrLogin(state.room.slug, name, passcode, email);
+    onAuthLogin: async ({ name, passcode }) => {
+      const res = await api.loginTree(state.room.slug, name, passcode);
       const row = Array.isArray(res) ? res[0] : res;
-      const isPlanted = row.kind === 'planted';
       state.session = { treeId: row.tree_id, editToken: row.edit_token, treeName: name };
       const { saveSession } = await import('./auth.js');
       saveSession(slug, state.session);
@@ -176,22 +223,32 @@ async function initRoom() {
       const mine = state.trees.find(t => t.id === state.selfTreeId);
       if (mine) state.selection = { kind: 'tree', tree: mine };
       live.notifyDataChanged();
-      updatePanel();
-      forest.render();
-      if (isPlanted && row.recovery_key) {
-        // 復元キー表示モーダル(植樹直後のみ)
-        const m = document.getElementById('recovery-modal');
-        document.getElementById('recovery-key').textContent = row.recovery_key;
-        m.classList.remove('hidden');
-        document.getElementById('recovery-copy').onclick = async () => {
-          await navigator.clipboard.writeText(row.recovery_key);
-          document.getElementById('recovery-copy').textContent = 'コピーしました';
-        };
-        document.getElementById('recovery-ok').onclick = () => m.classList.add('hidden');
-        showToast('森に樹を植えました', 'success');
+      updatePanel(); forest.render();
+      showToast('ログインしました', 'success');
+    },
+    onAuthPlant: async ({ name, passcode, email }) => {
+      // 仮登録: メール送信まで。実体化(trees行生成)はメールリンククリックで。
+      await api.requestTreeRegistration(state.room.slug, name, passcode, email, location.origin);
+      showToast('確認メールを送りました', 'success');
+      return { pending: true };
+    },
+    onForgotPass: async ({ name }) => {
+      const res = await api.requestPasscodeReset(state.room.slug, name);
+      if (res?.sent) {
+        showToast('登録メールに再設定リンクを送りました', 'success');
       } else {
-        showToast('ログインしました', 'success');
+        showToast('この名前にはメールが登録されていません', 'error');
       }
+    },
+    onUpdateCredentials: async ({ newPasscode, newEmail }) => {
+      if (!state.session?.editToken) throw new Error('ログインが必要です');
+      await api.updateTreeCredentials(state.session.editToken, newPasscode, newEmail);
+      // 反映(reloadで最新rowを取得)
+      await reload();
+      const mine = state.trees.find(t => t.id === state.selfTreeId);
+      if (mine) state.selection = { kind: 'tree', tree: mine };
+      updatePanel(); forest.render();
+      showToast('保存しました', 'success');
     },
     onSelectNode: (tree, node) => {
       state.selection = { kind: 'node', tree, node };
@@ -224,7 +281,7 @@ async function initRoom() {
   // ===== Phase 2: 生きている森 =====
   console.log('[phase2] init');
   const treeIdsRef = new Set((state.trees || []).map(t => t.id));
-  const live = new LiveForest(() => state.trees, () => forest.render());
+  const live = new LiveForest(() => state.trees, () => forest.render(), () => state.design);
   live.notifyDataChanged();
   live.start();
   console.log('[phase2] liveforest started, treeIds:', [...treeIdsRef]);
@@ -297,6 +354,16 @@ async function initRoom() {
       await api.updateTreePosition(state.session.editToken, tree.id, tree.x, tree.y);
     } catch (e) { showError(e, '樹の移動を保存できませんでした'); }
   };
+  state.onNodeReparented = async (tree, node, newParent) => {
+    const token = state.adminToken || state.session?.editToken;
+    if (!token) return;
+    try {
+      const saved = await api.reparentNode(token, node.id, newParent.id);
+      Object.assign(node, saved);
+      forest.render();
+      showToast(`「${newParent.text}」の子に移しました`, 'success');
+    } catch (e) { showError(e, '付け替えに失敗しました'); }
+  };
   state.onNodeMoved = async (tree, node) => {
     forest.render();
     // ドラッグ終了で連動波紋
@@ -313,22 +380,15 @@ async function initRoom() {
     } catch (e) { showError(e, 'ノードの移動を保存できませんでした'); }
   };
 
-  // 共有ボタン
-  document.getElementById('share-btn').addEventListener('click', () => {
-    const url = `${location.origin}/r/${state.room.slug}`;
-    openShareModal(url);
-  });
-
-  // 復元ボタン
-  document.getElementById('restore-btn').addEventListener('click', () => {
-    openRestoreModal(state, async (sess) => {
-      state.session = sess;
-      state.selfTreeId = sess.treeId;
-      await reload();
-      const mine = state.trees.find(t => t.id === state.selfTreeId);
-      if (mine) state.selection = { kind: 'tree', tree: mine };
-      updatePanel(); updatePlantBtn(); forest.render();
-    });
+  // パネル開閉トグル
+  const PANEL_HIDE_KEY = 'mori.panel.hidden';
+  const panelToggle = document.getElementById('panel-toggle');
+  if (localStorage.getItem(PANEL_HIDE_KEY) === '1') document.body.classList.add('panel-hidden');
+  panelToggle?.addEventListener('click', () => {
+    const hidden = document.body.classList.toggle('panel-hidden');
+    localStorage.setItem(PANEL_HIDE_KEY, hidden ? '1' : '0');
+    // 描画領域が変わったらcanvasもresize+再描画
+    setTimeout(() => { forest.resize(); forest.render(); }, 260);
   });
 
   // 時間帯を1分ごとに更新(1時間/24段階でゆっくり推移)

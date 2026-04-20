@@ -4,7 +4,7 @@ import { chromium, devices } from './node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 
-const BASE = process.env.TARGET_BASE || 'https://morinoki.vercel.app';
+const BASE = process.env.TARGET_BASE || 'https://morinokki.vercel.app';
 const REPORT_PATH = './TEST-REPORT.txt';
 
 // ===== 結果蓄積 =====

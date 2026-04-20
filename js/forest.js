@@ -57,7 +57,8 @@ export function createForest(canvas, state) {
 
   // ヒットテスト: ノード(最前面・深さ優先) > 幹
   // 位置は描画位置(display)で判定 — ゆらぎ/drift中でもタップが合う
-  function hitTest(sx, sy) {
+  // excludeNodeId を指定すると、その自ノードは対象外(D&Dで自分自身に重ねる防止)
+  function hitTest(sx, sy, excludeNodeId) {
     const w = screenToWorld(sx, sy);
     const trees = state.trees || [];
     for (let i = trees.length - 1; i >= 0; i--) {
@@ -66,6 +67,7 @@ export function createForest(canvas, state) {
       const sorted = nodes.slice().sort((a, b) => (b._depth || 0) - (a._depth || 0));
       for (const n of sorted) {
         if (n._x == null) continue;
+        if (excludeNodeId && n.id === excludeNodeId) continue;
         const dx = w.x - n._x, dy = w.y - n._y;
         const r = n._r || 10;
         if (dx*dx + dy*dy <= r*r) {
@@ -143,7 +145,7 @@ export function createForest(canvas, state) {
     }
   }
 
-  async function onUp() {
+  async function onUp(e) {
     if (!drag) return;
     const d = drag;
     drag = null;
@@ -153,7 +155,19 @@ export function createForest(canvas, state) {
     }
     if (d.moved > 6) {
       if (d.mode === 'drag-tree' && state.onTreeMoved) state.onTreeMoved(d.hit.tree);
-      else if (d.mode === 'drag-node' && state.onNodeMoved) state.onNodeMoved(d.hit.tree, d.hit.node);
+      else if (d.mode === 'drag-node') {
+        // ドロップ位置が他の「自ノード」上なら reparent、そうでなければ位置移動
+        let dropped = null;
+        try { dropped = d.last ? hitTest(d.last.x, d.last.y, d.hit.node.id) : null; } catch {}
+        const sameTree = dropped && dropped.type === 'node' && dropped.tree.id === d.hit.tree.id;
+        // 自分自身の子孫にはつけられない(循環防止)
+        const forbidden = sameTree && isDescendant(d.hit.tree, d.hit.node.id, dropped.node.id);
+        if (sameTree && !forbidden && state.onNodeReparented) {
+          state.onNodeReparented(d.hit.tree, d.hit.node, dropped.node);
+        } else if (state.onNodeMoved) {
+          state.onNodeMoved(d.hit.tree, d.hit.node);
+        }
+      }
     } else {
       if (d.hit) {
         if (d.hit.type === 'trunk' && state.onTrunkTap) state.onTrunkTap(d.hit.tree);
@@ -162,6 +176,19 @@ export function createForest(canvas, state) {
         if (state.onEmptyTap) state.onEmptyTap();
       }
     }
+  }
+
+  // node が ancestor の子孫か(循環防止用)
+  function isDescendant(tree, ancestorId, nodeId) {
+    const nodes = tree.nodes || [];
+    let cur = nodes.find(n => n.id === nodeId);
+    const seen = new Set();
+    while (cur && cur.parent_id && !seen.has(cur.id)) {
+      if (cur.parent_id === ancestorId) return true;
+      seen.add(cur.id);
+      cur = nodes.find(n => n.id === cur.parent_id);
+    }
+    return false;
   }
 
   function onWheel(e) {
@@ -260,7 +287,7 @@ export function createForest(canvas, state) {
           dy < worldTop - MARGIN || dy > worldBot + MARGIN) return;
       const ds = t._displayScale ?? 1.0;
       const filteredTree = cursor ? { ...t, nodes: (t.nodes || []).filter(n => Date.parse(n.created_at || 0) <= cursor) } : t;
-      drawTree(ctx, filteredTree, dx, dy, ds, { isSelf: t.id === state.selfTreeId });
+      drawTree(ctx, filteredTree, dx, dy, ds, { isSelf: t.id === state.selfTreeId, design: state.design });
     });
     ctx.restore();
 

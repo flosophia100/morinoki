@@ -1,6 +1,6 @@
 // 鳥と小動物を強制spawnしてスクショ
 import { chromium } from './node_modules/playwright/index.mjs';
-const BASE = 'https://morinoki.vercel.app';
+const BASE = 'https://morinokki.vercel.app';
 const browser = await chromium.launch({
   headless: true,
   executablePath: 'C:/Users/fubas/AppData/Local/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-win64/chrome-headless-shell.exe'

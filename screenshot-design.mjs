@@ -1,7 +1,7 @@
 // 新デザインのスクショ
 import { chromium } from './node_modules/playwright/index.mjs';
 
-const BASE = 'https://morinoki.vercel.app';
+const BASE = 'https://morinokki.vercel.app';
 const browser = await chromium.launch({
   headless: true,
   executablePath: 'C:/Users/fubas/AppData/Local/ms-playwright/chromium_headless_shell-1208/chrome-headless-shell-win64/chrome-headless-shell.exe'
@@ -42,10 +42,16 @@ await page.evaluate(() => {
 // 数秒ゆらぎを動作させる
 await new Promise(r => setTimeout(r, 3500));
 
-// idle に戻って全体観察
-await page.evaluate(() => document.querySelector('[data-action="to-idle"]')?.click());
-await new Promise(r => setTimeout(r, 2000));
-
+// 自分の樹をビューの中央に(明示的な centerOn)
+await page.evaluate(() => {
+  const s = window.__morinoki?.state;
+  const t = s?.trees?.find(x => x.id === s.selfTreeId);
+  if (!t) return;
+  const rect = document.getElementById('forest-canvas').getBoundingClientRect();
+  s.view = { ox: rect.width / 2 - t.x, oy: rect.height / 2 - t.y, scale: 1 };
+  window.__morinoki?.forest?.render?.();
+});
+await new Promise(r => setTimeout(r, 1500));
 await page.screenshot({ path: 'design-preview.png' });
 console.log('saved: design-preview.png');
 await browser.close();

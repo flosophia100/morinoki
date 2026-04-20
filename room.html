@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>森</title>
+<title>morinokki</title>
+<meta property="og:title" content="morinokki">
+<meta property="og:site_name" content="morinokki">
+<meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
@@ -23,46 +26,17 @@ window.SUPABASE_CONFIG = {
 </aside>
 
 <header class="room-header">
-  <span id="forest-name" class="forest-name">森</span>
+  <div class="room-header-left">
+    <button id="panel-toggle" class="btn-icon" title="パネル表示切替" aria-label="パネル表示切替">≡</button>
+    <span id="forest-name" class="forest-name">morinokki</span>
+  </div>
   <div class="room-header-right">
     <span id="forest-count" class="forest-count">0本の樹</span>
-    <button id="share-btn" class="btn-icon" title="森のURLを共有">↗</button>
-    <button id="restore-btn" class="btn-icon" title="樹を復元" aria-label="樹を復元">⚘</button>
   </div>
 </header>
 
 <div class="forest-container">
   <canvas id="forest-canvas"></canvas>
-</div>
-
-<!-- 共有モーダル -->
-<div id="share-modal" class="modal hidden">
-  <div class="modal-panel">
-    <h2>森を共有する</h2>
-    <p class="hint">このURLを仲間に伝えると、同じ森に入れます。</p>
-    <code id="share-url"></code>
-    <div id="share-qr" class="share-qr"></div>
-    <div class="modal-actions">
-      <button id="share-close" class="btn-secondary">閉じる</button>
-      <button id="share-copy" class="btn-primary">URLをコピー</button>
-    </div>
-  </div>
-</div>
-
-<!-- 復元モーダル -->
-<div id="restore-modal" class="modal hidden">
-  <div class="modal-panel">
-    <h2>樹を復元する</h2>
-    <p class="hint">別の端末から戻ってきた or 合言葉を忘れた場合に。</p>
-    <label>名前 <input id="restore-name" type="text" maxlength="20" placeholder="植えたときの名前" required></label>
-    <label>合言葉 または 復元キー <input id="restore-secret" type="text" placeholder="4桁 or 復元キー" required></label>
-    <p class="hint" style="font-size:0.76rem">合言葉(4桁)か、植樹直後に表示された英数字の復元キー どちらでもOK</p>
-    <div class="modal-actions">
-      <button id="restore-cancel" class="btn-secondary">キャンセル</button>
-      <button id="restore-submit" class="btn-primary">復元する</button>
-    </div>
-    <p id="restore-error" class="error hidden"></p>
-  </div>
 </div>
 
 <!-- タイムラプスコントロール(画面下中央・フッタ上) -->

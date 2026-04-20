@@ -1,7 +1,7 @@
 // Phase 5 E2E: 季節テーマ / 散歩モード / タイムラプス
 import { chromium } from './node_modules/playwright/index.mjs';
 
-const BASE = process.env.TARGET_BASE || 'https://morinoki.vercel.app';
+const BASE = process.env.TARGET_BASE || 'https://morinokki.vercel.app';
 
 const browser = await chromium.launch({
   headless: true,

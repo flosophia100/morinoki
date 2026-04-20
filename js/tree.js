@@ -1,4 +1,5 @@
 import { seededRandom, stringHash } from './utils.js';
+import { DEFAULTS as DESIGN_DEFAULTS } from './designconfig.js';
 
 // 1本の放射曲線を先太・先細で描く(2ストロークで軽量)
 // 1. 全長を細めで引く(先端)  2. 基部40%だけ太く上書き
@@ -33,14 +34,19 @@ function strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip)
 }
 
 // ====== 放射状バースト(ノード・幹共通) ======
-// 中心から周囲へ曲線で放射。先細りで尖る(先端ドットなし)。
-// 2層: (a) 密な近接曲線 + (b) 外周ギザギザ長曲線
+// 設定可能パラメタ: design から density, lengthVar, bend, spikeChance, spikeLen を取得
 export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts = {}) {
-  const { density = 1.0, jitter = 0.8 } = opts;
+  const design = opts.design || DESIGN_DEFAULTS;
+  const density = (opts.densityMul || 1.0) * (0.6 + design.density * 1.2); // 0.6〜1.8
+  const jitter = 0.2 + design.bend * 1.2; // 0.2〜1.4
+  const lenVar = design.lengthVar; // 0..1(線の長さ変動の幅)
+  const spikeChance = design.spikeChance; // 0..1
+  const spikeLen = 0.9 + design.spikeLen * 0.7; // 0.9..1.6 の倍率
+
   ctx.save();
   const strokeDark = strokeCol || col;
 
-  // 影(ベース形状の薄い影)
+  // 影
   ctx.save();
   ctx.fillStyle = 'rgba(40, 30, 15, 0.14)';
   ctx.beginPath();
@@ -48,26 +54,30 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   ctx.fill();
   ctx.restore();
 
-  // --- (a) 密な近接曲線(約0.35〜0.75r) ---
+  // --- (a) 密な近接曲線(中間層) ---
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
   const Nmid = Math.floor((22 + baseR * 0.45) * density);
   for (let i = 0; i < Nmid; i++) {
     const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.3;
-    const len = baseR * (0.45 + rngMid() * 0.3);
-    const bend = (rngMid() * 2 - 1) * len * 0.18 * jitter;
+    // ベース 0.7 で lenVar 分だけ変動(既定の lenVar=0.15 なら 0.7〜0.745)
+    const len = baseR * (0.7 + rngMid() * lenVar * 0.3);
+    const bend = (rngMid() * 2 - 1) * len * 0.22 * jitter;
     const alpha = 0.5 + rngMid() * 0.4;
     const wBase = 2.2 + rngMid() * 1.2;
     const wTip = 0.5 + rngMid() * 0.4;
     strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip);
   }
 
-  // --- (b) 外周に突き出すギザギザ長曲線 ---
+  // --- (b) 外周(こんもり: 大半はbaseR近く、スパイクはまばら) ---
   const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
   const Nout = Math.floor((14 + baseR * 0.28) * density);
   for (let i = 0; i < Nout; i++) {
     const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
-    const spike = rngOut() < 0.38;
-    const len = baseR * (spike ? (0.95 + rngOut() * 0.5) : (0.7 + rngOut() * 0.25));
+    const spike = rngOut() < spikeChance;
+    // 非スパイクは baseR 近くでほぼ均一、スパイクだけ伸ばす
+    const len = baseR * (spike
+      ? (spikeLen + rngOut() * lenVar * 0.25)
+      : (0.92 + rngOut() * lenVar * 0.15));
     const bend = (rngOut() * 2 - 1) * len * 0.22 * jitter;
     const alpha = spike ? (0.75 + rngOut() * 0.2) : (0.55 + rngOut() * 0.35);
     const wBase = spike ? (2.6 + rngOut() * 1.4) : (1.8 + rngOut() * 1.0);
@@ -76,7 +86,7 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   }
   ctx.globalAlpha = 1;
 
-  // 中心のアンカー(濃い小円):根元の密集感
+  // 中心アンカー
   ctx.fillStyle = strokeDark;
   ctx.globalAlpha = 0.85;
   ctx.beginPath();
@@ -90,14 +100,17 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
 // ====== 連結線(蛇行する枝) ======
 // 3次ベジェで perpendicular にランダムオフセット
 // 太さはテーパー(幹側太、先端細)
-export function drawMeanderingBranch(ctx, x1, y1, x2, y2, w1, w2, seed, color) {
+// opts.meander: 0..1 で蛇行の振幅倍率(0.0=ほぼ直線, 1.0=大きく蛇行)
+export function drawMeanderingBranch(ctx, x1, y1, x2, y2, w1, w2, seed, color, opts = {}) {
+  const meander = typeof opts.meander === 'number' ? opts.meander : 0.5;
   const rng = seededRandom(Math.max(1, Math.floor(seed)));
   const dx = x2 - x1, dy = y2 - y1;
   const dist = Math.hypot(dx, dy) || 1;
   const perpX = -dy / dist, perpY = dx / dist;
 
   // 2つの制御点:1/3と2/3地点で、垂直方向に揺らぎ
-  const amp = dist * 0.22;
+  // meander 0..1 を 0.04..0.38 の振幅比にマップ
+  const amp = dist * (0.04 + meander * 0.34);
   const off1 = (rng() * 2 - 1) * amp;
   const off2 = (rng() * 2 - 1) * amp;
   // 接線方向の揺らぎも少し入れる(前後に伸縮)
@@ -154,10 +167,12 @@ function buildHierarchy(nodes) {
   return byParent;
 }
 
-export function computeAllPositions(tree, cx, cy, scale = 1.0) {
+export function computeAllPositions(tree, cx, cy, scale = 1.0, design = DESIGN_DEFAULTS) {
   const rng = seededRandom(Number(tree.seed) || 1);
   const hierarchy = buildHierarchy(tree.nodes || []);
   const out = [];
+  // design.nodeSize (0..1) を 0.7..1.35 倍にマップ(0.5が中立)
+  const nodeSizeMul = 0.7 + design.nodeSize * 0.65;
 
   function walk(parentId, px, py, centerAngle, sector, depth) {
     const children = hierarchy.get(parentId) || [];
@@ -189,7 +204,7 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0) {
 
       // 葉ノードも十分な存在感を持つよう大きめに
       const sizeScale = depth === 0 ? 1 : 0.92;
-      const nr = (18 + (child.size || 3) * 5.0) * scale * sizeScale;
+      const nr = (18 + (child.size || 3) * 5.0) * scale * sizeScale * nodeSizeMul;
 
       out.push({
         node: child, x: ex, y: ey,
@@ -204,17 +219,22 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0) {
   return out;
 }
 
-export function trunkRadiusFor(tree, scale = 1.0) {
+export function trunkRadiusFor(tree, scale = 1.0, design = DESIGN_DEFAULTS) {
   const name = tree.name || '';
   const base = Math.max(38, Math.min(72, 34 + name.length * 7));
-  return base * scale;
+  // design.trunkSize (0..1) を 0.7..1.35 倍にマップ
+  const trunkMul = 0.7 + design.trunkSize * 0.65;
+  return base * scale * trunkMul;
 }
 
 export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   const { isSelf = false } = opts;
-  const positions = computeAllPositions(tree, cx, cy, scale);
-  const trunkR = trunkRadiusFor(tree, scale);
+  const design = opts.design || DESIGN_DEFAULTS;
+  const positions = computeAllPositions(tree, cx, cy, scale, design);
+  const trunkR = trunkRadiusFor(tree, scale, design);
   const seed = Number(tree.seed) || stringHash(tree.name || 'x');
+  // design.branchThickness (0..1) → 0.5..1.6 倍
+  const branchMul = 0.5 + design.branchThickness * 1.1;
 
   // 自分の樹の光の輪(背後)
   if (isSelf) {
@@ -231,13 +251,14 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   // 枝(蛇行する曲線)
   positions.forEach((p, idx) => {
     const depthBoost = p.depth === 0 ? 1.0 : 0.72;
-    const wStart = Math.max(1.6, 5.2 * scale * depthBoost);
-    const wEnd = Math.max(0.9, 1.4 * scale * depthBoost);
+    const wStart = Math.max(1.6, 5.2 * scale * depthBoost * branchMul);
+    const wEnd = Math.max(0.9, 1.4 * scale * depthBoost * branchMul);
     const branchSeed = stringHash((p.node.id || '') + ':' + idx);
     drawMeanderingBranch(
       ctx, p.parentX, p.parentY, p.x, p.y,
       wStart, wEnd, branchSeed,
-      p.depth === 0 ? 'rgba(107, 74, 43, 0.85)' : 'rgba(139, 106, 74, 0.75)'
+      p.depth === 0 ? 'rgba(122, 108, 92, 0.85)' : 'rgba(157, 137, 114, 0.72)',
+      { meander: design.branchMeander }
     );
   });
 
@@ -245,10 +266,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   positions.forEach(p => {
     const n = p.node;
     const nSeed = stringHash(n.id || n.text || 'node');
-    const col = n.color || '#5a6b3e';
+    const col = n.color || '#6f8a7d';
     const strokeCol = darken(col, 0.4);
     drawRadialBurst(ctx, p.x, p.y, p.nr, nSeed, col, strokeCol, {
-      density: 1.1, jitter: 0.7, dots: true
+      densityMul: 1.1, design
     });
 
     if (n.description) {
@@ -270,7 +291,7 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       const tw = ctx.measureText(n.text).width;
       ctx.fillStyle = 'rgba(244, 237, 224, 0.55)';
       ctx.fillRect(p.x - tw/2 - 2, p.y - 7, tw + 4, 14);
-      ctx.fillStyle = 'rgba(58, 72, 40, 0.95)';
+      ctx.fillStyle = 'rgba(30, 42, 51, 0.92)';
       ctx.fillText(n.text, p.x, p.y);
       ctx.restore();
     } else {
@@ -284,7 +305,7 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       const bgX = isRight ? p.x + pad - 1 : p.x + pad - tw - 3;
       ctx.fillStyle = 'rgba(244, 237, 224, 0.72)';
       ctx.fillRect(bgX, p.y - 7, tw + 4, 14);
-      ctx.fillStyle = 'rgba(58, 72, 40, 0.95)';
+      ctx.fillStyle = 'rgba(30, 42, 51, 0.92)';
       ctx.fillText(n.text, p.x + pad, p.y);
       ctx.restore();
     }
@@ -295,10 +316,11 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   });
 
   // ====== 幹(大きな放射状バースト + 名前) ======
-  const trunkCol = isSelf ? '#b98a3e' : '#4f6236';
-  const trunkStroke = isSelf ? '#8c651f' : '#2f3e22';
+  // 自分: 温かいアンバー / 他人: 冷たいフィヨルドセージ
+  const trunkCol = isSelf ? '#c89566' : '#6f8a7d';
+  const trunkStroke = isSelf ? '#8e6440' : '#435e52';
   drawRadialBurst(ctx, cx, cy, trunkR, seed * 7, trunkCol, trunkStroke, {
-    density: 1.3, jitter: 0.6, dots: true
+    densityMul: 1.3, design
   });
 
   // 名前(中央、小さな背景つき)

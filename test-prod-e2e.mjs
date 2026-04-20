@@ -1,7 +1,7 @@
-// 本番(morinoki.vercel.app)を実ブラウザでE2E
+// 本番(morinokki.vercel.app)を実ブラウザでE2E
 import { chromium } from './node_modules/playwright/index.mjs';
 
-const BASE = 'https://morinoki.vercel.app';
+const BASE = 'https://morinokki.vercel.app';
 
 const browser = await chromium.launch({
   headless: true,

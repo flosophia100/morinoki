@@ -4,7 +4,7 @@
 
 ## プロジェクト現在地
 
-- **状態**: Phase 0〜5 + 運用作業まで完了。本番(https://morinoki.vercel.app)で運用可能
+- **状態**: Phase 0〜5 + 運用作業まで完了。本番(https://morinokki.vercel.app)で運用可能
 - **コードベース**: Vanilla ESM JavaScript、ビルドツールなし、`js/*.js` で責務別
 - **バックエンド**: Supabase(Postgres + Realtime Broadcast)
 - **配信**: Vercel static + GitHub Actions(syntax check)
@@ -62,7 +62,7 @@ vercel deploy --prod --yes  # またはGitHub連携で自動
 npx http-server . -p 8765
 
 # 本番向けテスト(全phase)
-for t in test-phase*.mjs; do TARGET_BASE=https://morinoki.vercel.app node "$t"; done
+for t in test-phase*.mjs; do TARGET_BASE=https://morinokki.vercel.app node "$t"; done
 ```
 
 ## 秘密情報の扱い

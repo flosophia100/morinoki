@@ -35,9 +35,30 @@ export const api = {
     rpc('auth_tree', { p_tree_id: treeId, p_secret: secret }),
   plantOrLogin: (roomSlug, name, passcode, email) =>
     rpc('plant_or_login', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
+  loginTree: (roomSlug, name, passcode) =>
+    rpc('login_tree', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode }),
+  plantTree: (roomSlug, name, passcode, email) =>
+    rpc('plant_tree', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
+  requestTreeRegistration: (roomSlug, name, passcode, email, baseUrl) =>
+    rpc('request_tree_registration', {
+      p_room_slug: roomSlug, p_name: name, p_passcode: passcode,
+      p_email: email, p_base_url: baseUrl || null,
+    }),
+  verifyRegistration: (token) =>
+    rpc('verify_registration', { p_token: token }),
+  updateTreeCredentials: (editToken, newPasscode, newEmail) =>
+    rpc('update_tree_credentials', {
+      p_edit_token: editToken,
+      p_new_passcode: newPasscode == null ? null : newPasscode,
+      p_new_email: newEmail === undefined ? null : newEmail,
+    }),
+  requestPasscodeReset: (roomSlug, name) =>
+    rpc('request_passcode_reset', { p_room_slug: roomSlug, p_name: name }),
   adminLogin: (slug, passcode) => rpc('admin_login', { p_slug: slug, p_passcode: passcode }),
   setAdminPasscode: (slug, currentPw, newPw) =>
     rpc('set_admin_passcode', { p_slug: slug, p_current_passcode: currentPw, p_new_passcode: newPw }),
+  setRoomDesign: (adminToken, design) =>
+    rpc('set_room_design', { p_admin_token: adminToken, p_design: design }),
   upsertNode: (token, treeId, node) => {
     const args = {
       p_edit_token: token, p_tree_id: treeId,
@@ -53,6 +74,8 @@ export const api = {
   },
   clearNodeField: (token, nodeId, field) =>
     rpc('clear_node_field', { p_edit_token: token, p_node_id: nodeId, p_field: field }),
+  reparentNode: (token, nodeId, newParentId) =>
+    rpc('reparent_node', { p_edit_token: token, p_node_id: nodeId, p_new_parent_id: newParentId || null }),
   deleteNode: (token, nodeId) =>
     rpc('delete_node', { p_edit_token: token, p_node_id: nodeId }),
   updateTreePosition: (token, treeId, x, y) =>

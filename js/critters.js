@@ -35,7 +35,7 @@ export class Critters {
       vy: (Math.random() - 0.5) * 15,
       phase: Math.random() * Math.PI * 2,
       wing: 0,
-      color: ['#2a2419', '#4a3525', '#1a1a1a', '#3d2818'][Math.floor(Math.random() * 4)],
+      color: ['#1e2a33', '#3f5a4e', '#52616e', '#2d3a44'][Math.floor(Math.random() * 4)],
       size: 6 + Math.random() * 4,
       alive: true
     });
@@ -87,7 +87,7 @@ export function drawBackgroundCanopies(ctx, W, H, nodeCount, seed = 42) {
     const y = rng() * H;
     const r = 10 + rng() * 28;
     const tint = 0.05 + rng() * 0.10; // 非常に薄い
-    ctx.fillStyle = `rgba(58, 80, 38, ${tint})`;
+    ctx.fillStyle = `rgba(111, 138, 125, ${tint})`;
     ctx.beginPath();
     const N = 10 + Math.floor(rng() * 6);
     const jit = [];

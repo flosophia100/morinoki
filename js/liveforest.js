@@ -8,9 +8,10 @@ import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './
 //
 // すべてクライアント側の視覚演出。DBへの保存は意図的にしない。
 export class LiveForest {
-  constructor(getTrees, onTick) {
+  constructor(getTrees, onTick, getDesign = null) {
     this.getTrees = getTrees;
     this.onTick = onTick;
+    this.getDesign = getDesign || (() => null);
     this.t = 0;
     this.running = false;
     this.rafId = null;
@@ -76,19 +77,23 @@ export class LiveForest {
   }
 
   tick() {
-    this.t += 0.016;
+    const design = this.getDesign() || null;
+    // design.shimmerSpeed: 0..1 → 時間ステップ 0.006..0.030(0.5中立で0.016)
+    const speedMul = design ? (0.4 + design.shimmerSpeed * 1.2) : 1.0;
+    this.t += 0.016 * speedMul;
+    // design.shimmerAmp: 0..1 → 振幅 0.0..2.0(0.5中立で1.0)
+    const ampMul = design ? (design.shimmerAmp * 2.0) : 1.0;
     const trees = this.getTrees();
 
     // 風: 位相ずれでゆらぎ(ドラッグ中の樹はスキップ)
-    // さらに視認性を上げるため振幅をほぼ倍に
     trees.forEach(t => {
       this.ensureInit(t);
       if (t._dragging) { t._windX = 0; t._windY = 0; return; }
       const seed = Number(t.seed) || stringHash(t.name || 'x');
       const pX = (seed % 1009) * 0.01;
       const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
-      const windX = Math.sin(this.t * 0.6 + pX) * 11 + Math.sin(this.t * 0.25 + pX * 1.7) * 4.5;
-      const windY = Math.cos(this.t * 0.52 + pY) * 9 + Math.cos(this.t * 0.21 + pY * 1.3) * 4.0;
+      const windX = (Math.sin(this.t * 0.6 + pX) * 11 + Math.sin(this.t * 0.25 + pX * 1.7) * 4.5) * ampMul;
+      const windY = (Math.cos(this.t * 0.52 + pY) * 9 + Math.cos(this.t * 0.21 + pY * 1.3) * 4.0) * ampMul;
       t._windX = windX;
       t._windY = windY;
     });
@@ -172,7 +177,7 @@ export class LiveForest {
     });
 
     // ===== ノード粒子シム(wordmap流のcollide/charge/wind) =====
-    tickNodeSim(trees, this.t);
+    tickNodeSim(trees, this.t, design);
   }
 
   // ノード編集/作成/移動などで呼ぶ: 連動した波紋 + そのノードへのインパルス

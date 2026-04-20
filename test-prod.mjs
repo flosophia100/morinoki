@@ -12,7 +12,7 @@ page.on('requestfailed', r => consoleErrors.push('requestfailed: ' + r.url() + '
 
 // 1. index
 console.log('--- index ---');
-await page.goto('https://morinoki.vercel.app/', { waitUntil: 'networkidle' });
+await page.goto('https://morinokki.vercel.app/', { waitUntil: 'networkidle' });
 console.log('title:', await page.title());
 console.log('slug auto:', await page.$eval('#forest-slug', el => el.value));
 

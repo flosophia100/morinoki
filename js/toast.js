@@ -32,15 +32,24 @@ export function showError(err, fallback = '操作に失敗しました') {
 }
 
 // 接続状態バナー(画面上部、永続)
+// 点滅防止のため、'reconnecting' は3秒持続したときだけ表示する。
+// 3秒以内にonlineへ戻れば、一度も表示せずに消える。
 let statusEl = null;
-export function setConnectionStatus(status) {
+let pendingStatus = 'online';
+let displayTimer = null;
+const RECONNECT_DELAY_MS = 3000;
+
+function ensureStatusEl() {
   if (!statusEl) {
     statusEl = document.createElement('div');
     statusEl.id = 'connection-status';
     statusEl.className = 'connection-status';
     document.body.appendChild(statusEl);
   }
-  // status: 'online' | 'offline' | 'reconnecting' | 'realtime-down'
+  return statusEl;
+}
+
+function applyStatus(status) {
   const map = {
     online: { text: '', show: false, cls: 'online' },
     offline: { text: 'オフラインです', show: true, cls: 'offline' },
@@ -48,7 +57,26 @@ export function setConnectionStatus(status) {
     'realtime-down': { text: 'リアルタイム同期が止まっています', show: true, cls: 'warning' },
   };
   const cfg = map[status] || map.online;
-  statusEl.textContent = cfg.text;
-  statusEl.className = 'connection-status ' + cfg.cls;
-  statusEl.style.display = cfg.show ? 'block' : 'none';
+  const el = ensureStatusEl();
+  el.textContent = cfg.text;
+  el.className = 'connection-status ' + cfg.cls;
+  el.style.display = cfg.show ? 'block' : 'none';
+}
+
+export function setConnectionStatus(status) {
+  pendingStatus = status;
+  // online / offline は即時反映(online は点滅しないし、offline は確実)
+  if (status === 'online' || status === 'offline') {
+    if (displayTimer) { clearTimeout(displayTimer); displayTimer = null; }
+    applyStatus(status);
+    return;
+  }
+  // reconnecting / realtime-down: しばらく続いた場合のみ表示
+  if (displayTimer) return; // 既に遅延中
+  displayTimer = setTimeout(() => {
+    displayTimer = null;
+    // 遅延中に online に復帰していたら何もしない
+    if (pendingStatus === 'online') return;
+    applyStatus(pendingStatus);
+  }, RECONNECT_DELAY_MS);
 }

@@ -1,17 +1,18 @@
 // 時間帯に応じた背景色/ヘッダ色を返す
 // keyframes: ローカル時刻(0-24) に対して色を定義、線形補間
+// Nordic色調: 冷たい白+フィヨルドブルー+淡いアンバー。サンセットも控えめ。
 const KEYFRAMES = [
-  { h: 0,  top: '#1b2441', bot: '#0f1629', tone: 'night',   ambient: 'rgba(180,190,220,0.06)' },
-  { h: 4,  top: '#2c3655', bot: '#171d36', tone: 'predawn', ambient: 'rgba(196,200,220,0.10)' },
-  { h: 6,  top: '#e8d6c4', bot: '#d5b8a0', tone: 'dawn',    ambient: 'rgba(255,220,180,0.15)' },
-  { h: 8,  top: '#f3e9d3', bot: '#e4d7b4', tone: 'morning', ambient: 'rgba(255,245,210,0.12)' },
-  { h: 11, top: '#f2ead4', bot: '#e2d4b5', tone: 'noon',    ambient: 'rgba(255,250,230,0.05)' },
-  { h: 14, top: '#f2ead4', bot: '#e2d4b5', tone: 'noon',    ambient: 'rgba(255,250,230,0.05)' },
-  { h: 16, top: '#f2d9b0', bot: '#dfa882', tone: 'afternoon', ambient: 'rgba(255,210,150,0.10)' },
-  { h: 18, top: '#d88b6a', bot: '#7e4c5e', tone: 'sunset',  ambient: 'rgba(255,160,120,0.18)' },
-  { h: 20, top: '#554172', bot: '#241a3a', tone: 'dusk',    ambient: 'rgba(160,140,200,0.15)' },
-  { h: 22, top: '#232a4c', bot: '#11192e', tone: 'night',   ambient: 'rgba(180,190,220,0.08)' },
-  { h: 24, top: '#1b2441', bot: '#0f1629', tone: 'night',   ambient: 'rgba(180,190,220,0.06)' }
+  { h: 0,  top: '#16233a', bot: '#0c1424', tone: 'night',     ambient: 'rgba(200,210,230,0.05)' },
+  { h: 4,  top: '#28334f', bot: '#151c30', tone: 'predawn',   ambient: 'rgba(200,210,230,0.08)' },
+  { h: 6,  top: '#c8d4de', bot: '#a5b4c2', tone: 'dawn',      ambient: 'rgba(210,220,230,0.14)' },
+  { h: 8,  top: '#e4ebec', bot: '#c9d4d7', tone: 'morning',   ambient: 'rgba(220,228,232,0.10)' },
+  { h: 11, top: '#ecefe9', bot: '#d5dbd7', tone: 'noon',      ambient: 'rgba(230,235,230,0.04)' },
+  { h: 14, top: '#ecefe9', bot: '#d5dbd7', tone: 'noon',      ambient: 'rgba(230,235,230,0.04)' },
+  { h: 16, top: '#e6d5c6', bot: '#c9a99d', tone: 'afternoon', ambient: 'rgba(220,190,160,0.08)' },
+  { h: 18, top: '#c0857a', bot: '#5f546b', tone: 'sunset',    ambient: 'rgba(200,150,130,0.14)' },
+  { h: 20, top: '#45415e', bot: '#1d1e34', tone: 'dusk',      ambient: 'rgba(170,170,200,0.12)' },
+  { h: 22, top: '#1f2842', bot: '#10172a', tone: 'night',     ambient: 'rgba(200,210,230,0.06)' },
+  { h: 24, top: '#16233a', bot: '#0c1424', tone: 'night',     ambient: 'rgba(200,210,230,0.05)' }
 ];
 
 function hexToRgb(h) {
@@ -38,11 +39,12 @@ function seasonOf(date) {
 }
 
 // 季節別のアクセント色(描画側で使用)とアンビエント補正
+// Nordic季節アクセント
 const SEASON_ACCENT = {
-  spring:  { leaf: '#8dab5e', bloom: '#f4c5cd', mist: 'rgba(240,210,220,0.10)', name: '春' },
-  summer:  { leaf: '#3d5826', bloom: '#b8d98a', mist: 'rgba(170,200,130,0.06)', name: '夏' },
-  autumn:  { leaf: '#a87034', bloom: '#d66f2c', mist: 'rgba(220,150,80,0.12)',  name: '秋' },
-  winter:  { leaf: '#6a7a5a', bloom: '#e6eaf0', mist: 'rgba(230,235,245,0.16)', name: '冬' },
+  spring:  { leaf: '#a8c18a', bloom: '#ebd2d0', mist: 'rgba(230,210,210,0.08)', name: '春' },
+  summer:  { leaf: '#5d7f6a', bloom: '#aec7b5', mist: 'rgba(170,200,180,0.05)', name: '夏' },
+  autumn:  { leaf: '#b07a4c', bloom: '#c88a55', mist: 'rgba(205,165,120,0.10)', name: '秋' },
+  winter:  { leaf: '#8ea0a8', bloom: '#eaf0f4', mist: 'rgba(220,230,240,0.16)', name: '冬' },
 };
 
 export function atmosphereAt(date = new Date()) {

@@ -1,7 +1,7 @@
 // Phase 4 E2E: toast, mobile, offline/reconnect, CSV export, perf smoke
 import { chromium, devices } from './node_modules/playwright/index.mjs';
 
-const BASE = process.env.TARGET_BASE || 'https://morinoki.vercel.app';
+const BASE = process.env.TARGET_BASE || 'https://morinokki.vercel.app';
 
 const browser = await chromium.launch({
   headless: true,

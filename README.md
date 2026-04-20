@@ -3,7 +3,7 @@
 > ひとりが一本の樹になり、クラスはひとつの森になる。
 > 自分を、キーワードで植える。
 
-**本番**: https://morinoki.vercel.app
+**本番**: https://morinokki.vercel.app
 
 ## 概要
 
@@ -18,9 +18,9 @@
 ## 使い方
 
 ### 1. 森をつくる
-1. https://morinoki.vercel.app を開く
+1. https://morinokki.vercel.app を開く
 2. 森の名前とURLを決める → **森をつくる**
-3. 発行された `https://morinoki.vercel.app/r/<slug>` を仲間に共有(右上の↗ボタンで QRコードも出せる)
+3. 発行された `https://morinokki.vercel.app/r/<slug>` を仲間に共有(右上の↗ボタンで QRコードも出せる)
 
 ### 2. 樹を植える
 1. URLにアクセスして **+ 樹を植える**
@@ -133,7 +133,7 @@ for f in js/*.js; do node --input-type=module --check < "$f"; done
 
 # Playwright E2E
 node test-phase4.mjs        # モバイル/toast/CSV/offline
-TARGET_BASE=https://morinoki.vercel.app node test-phase4.mjs
+TARGET_BASE=https://morinokki.vercel.app node test-phase4.mjs
 ```
 
 ---
