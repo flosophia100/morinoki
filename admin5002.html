@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>morinokki admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/main.css">
+<script>
+window.SUPABASE_CONFIG = {
+  url: 'https://wlxqavbrarthldodiqyp.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndseHFhdmJyYXJ0aGxkb2RpcXlwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MzIwMTIsImV4cCI6MjA5MjEwODAxMn0.Wagb6Qu-zD3v6Rw3L_HFUevhtxT2Z-EqQCAueqqbvQg'
+};
+</script>
+</head>
+<body class="page-admin">
+  <main class="admin-entry">
+    <!-- ログイン画面 -->
+    <div id="admin-login-box" class="admin-box">
+      <h1 class="admin-title">morinokki <span class="admin-subtitle">admin</span></h1>
+      <label class="admin-label">ID</label>
+      <input id="admin-login-id" type="text" autocomplete="username" maxlength="40">
+      <label class="admin-label">合言葉</label>
+      <input id="admin-login-pw" type="password" autocomplete="current-password" maxlength="40">
+      <button id="admin-login-btn" class="btn-primary w-full" style="margin-top:0.8rem">ログイン</button>
+      <p id="admin-login-error" class="error hidden"></p>
+    </div>
+
+    <!-- ダッシュボード -->
+    <div id="admin-dashboard" class="admin-box hidden">
+      <header class="admin-header">
+        <h1 class="admin-title">morinokki <span class="admin-subtitle">admin</span></h1>
+        <button id="admin-logout-btn" class="btn-secondary">ログアウト</button>
+      </header>
+
+      <section class="admin-section">
+        <h2>森を作る</h2>
+        <form id="create-room-form" class="admin-form">
+          <label class="admin-label">森の名前</label>
+          <input id="new-room-name" type="text" maxlength="40" required placeholder="3年A組の森">
+          <label class="admin-label">URL(半角英数字とハイフン、3〜40文字)</label>
+          <input id="new-room-slug" type="text" maxlength="40" required pattern="[a-z0-9\-]{3,40}" placeholder="3a-forest">
+          <button type="submit" class="btn-primary w-full" style="margin-top:0.6rem">作成する</button>
+          <p id="create-room-error" class="error hidden"></p>
+        </form>
+      </section>
+
+      <section class="admin-section">
+        <h2>森の一覧</h2>
+        <ul id="room-list" class="room-list"></ul>
+        <p id="room-list-empty" class="admin-hint hidden">まだ森はありません</p>
+      </section>
+
+      <section class="admin-section">
+        <h2>管理者の設定</h2>
+        <details>
+          <summary class="admin-label" style="cursor:pointer">IDと合言葉を変更</summary>
+          <div style="margin-top:0.6rem">
+            <label class="admin-label">新しいID(3文字以上)</label>
+            <input id="new-admin-id" type="text" maxlength="40" autocomplete="username">
+            <label class="admin-label">新しい合言葉(4文字以上)</label>
+            <input id="new-admin-pw" type="password" maxlength="40" autocomplete="new-password">
+            <button id="update-creds-btn" class="btn-primary w-full" style="margin-top:0.6rem">更新する</button>
+            <p id="update-creds-msg" class="admin-hint"></p>
+          </div>
+        </details>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

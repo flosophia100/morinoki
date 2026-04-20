@@ -75,33 +75,21 @@ export function renderInfoPanel(state, selection, callbacks) {
 // ----- Idle(未ログイン/タイトル画面) -----
 function idleHTML(state) {
   const isAdmin = !!state.adminToken;
-  const adminMode = state.isAdminMode;
   const tab = state.authTab || 'login'; // 'login' | 'new'
   return `
     <div class="ip-block">
       <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || 'morinokki')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
       <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
     </div>
-    ${adminMode && !isAdmin ? `
-      <div class="ip-block ip-auth-form">
-        <label class="mini-label">管理者としてログイン</label>
-        <p class="ip-desc" style="margin-bottom:0.4rem">このURLは管理者専用です。管理者の合言葉で入ってください。</p>
-        <label class="mini-label">管理者合言葉</label>
-        <input id="admin-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="管理者合言葉">
-        <button data-action="admin-login" class="btn-primary w-full" style="margin-top:0.6rem">管理者として入る</button>
-        <p class="ip-hint" style="font-size:0.72rem;margin-top:0.5rem">初期の合言葉は「admin」。最初に入ったら必ず変更してください。</p>
-        <p id="admin-error" class="error hidden"></p>
-      </div>
-    ` : ''}
     ${isAdmin ? `
       <div class="ip-block">
         <label class="mini-label">管理者モード</label>
         <p class="ip-desc" style="margin-bottom:0.4rem">全員の樹と枝を加筆修正できます。</p>
-        <button data-action="admin-change-pw" class="btn-secondary w-full">合言葉を変更</button>
+        <a href="/admin5002" class="btn-secondary w-full" style="display:inline-block;text-align:center;text-decoration:none">ダッシュボードへ</a>
         <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
       </div>
     ` : ''}
-    ${!adminMode ? `
+    ${!isAdmin ? `
       <div class="ip-block ip-auth-form">
         <div class="auth-tabs">
           <button data-auth-tab="login" class="auth-tab ${tab==='login'?'on':''}">ログイン</button>
@@ -174,20 +162,8 @@ function wireIdle(el, state, cb) {
     });
   });
 
-  // 管理者ログイン
-  const adminBtn = el.querySelector('[data-action="admin-login"]');
-  const adminErr = el.querySelector('#admin-error');
-  adminBtn?.addEventListener('click', async () => {
-    adminErr?.classList.add('hidden');
-    const pw = el.querySelector('#admin-pass')?.value || '';
-    if (pw.length < 4) { if (adminErr) { adminErr.textContent = '4文字以上'; adminErr.classList.remove('hidden'); } return; }
-    if (!cb.onAdminLogin) return;
-    try { await cb.onAdminLogin(pw); }
-    catch (e) { if (adminErr) { adminErr.textContent = e.message || '管理者ログイン失敗'; adminErr.classList.remove('hidden'); } }
-  });
+  // 管理者ログアウト(ログインは /admin5002 でのみ行う)
   el.querySelector('[data-action="admin-logout"]')?.addEventListener('click', () => cb.onAdminLogout && cb.onAdminLogout());
-  el.querySelector('[data-action="admin-change-pw"]')?.addEventListener('click', () => cb.onAdminChangePw && cb.onAdminChangePw());
-  el.querySelector('#admin-pass')?.addEventListener('keydown', e => { if (e.key === 'Enter') adminBtn?.click(); });
 
   // デザインスライダー(管理者のみ存在)
   const sliders = el.querySelectorAll('input[data-design-key]');

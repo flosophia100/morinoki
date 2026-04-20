@@ -1200,3 +1200,353 @@ CLAUDE.md の **先頭**(1行目)に以下を挿入(既存の内容は残す):
 - Phase 2: `d3-force` 導入、`alphaDecay(0)` 常時稼働、幹の弱バネ、枝link、類似ノード引力、パーリンノイズ風、成長アニメ、Supabase Realtime購読
 - Phase 3: 時間帯演出、他樹ボトムシート、復元キー/メール復元、QR
 - Phase 4: 主催者ダッシュボード、モバイル最適化、エラーUX、60fpsパフォ
+
+---
+
+# 認証・権限モデル再設計(2026-04-21 確定仕様)
+
+> **ステータス**: 仕様確定。実装計画を本ドキュメント後半に記述。
+> **Q8(ユーザー管理の範囲)のみ要最終確認**。下記「未確定」参照。
+
+## 確定事項
+
+| Q | 項目 | 決定 |
+|---|---|---|
+| Q1 | 管理者単位 | **グローバル1アカウント** |
+| Q2 | 管理者URL | **`/admin5002` 一本化** |
+| Q3 | index.html | **削除**(ルートは404に) |
+| Q4 | 既存の森 | **全削除** |
+| Q5 | 合言葉/メール変更の確認メール | **両方**(新宛:承認 + 現宛:通知) |
+| Q6 | 合言葉忘れリカバリ | **再設定リンクメール** |
+| Q7 | 背景・ギミック管理 | **時間帯配色 + 季節固定 + 鳥頻度 + 背景森影**(提案全項目) |
+| Q8 | ユーザー管理(要最終確認) | **一覧 / 強制削除 / 合言葉リセット(管理者発行) / メール変更(管理者権限)** の4つを想定 |
+
+---
+
+## 全体像
+
+### アクターと動線
+
+1. **グローバル管理者**(1アカウント)
+   - `/admin5002` にアクセス → ID+合言葉 → 管理者トークン発行
+   - できること: 森の作成/削除、各森のユーザー管理、デザイン管理、ゆらぎ管理、背景・ギミック管理
+
+2. **一般ユーザー**(幹の所有者)
+   - 森の URL `/r/<slug>` にアクセス → 「ログイン」or「新規作成」を選択
+   - 新規作成: ニックネーム+合言葉+メール → 確認メール → リンククリックで幹が生える
+   - 合言葉/メール変更は都度メール認証
+   - 合言葉忘れ → メール宛に再設定リンク → 新合言葉入力
+
+3. **匿名閲覧者**
+   - 森の URL にアクセス → そのまま閲覧可能(編集不可)
+
+### 廃止するもの
+- `index.html` とトップページ
+- `rooms.admin_passcode_hash`(森ごと管理者 → グローバル管理者に移行)
+- `trees.recovery_key_hash`(復元キー文字列を廃止)
+- `auth_tree` RPC(復元キー認証)
+- 既存の全ての森(DB 上の `rooms` 全行)
+
+### 新規作成・変更するもの
+- `admin5002.html` — 管理者ログイン+ダッシュボード
+- `admins` テーブル(グローバル管理者)
+- `pending_credential_change` テーブル(合言葉・メール変更の保留)
+- `rooms.ambience` jsonb カラム(背景ギミック設定)
+- 各 RPC の admin token 検証ロジックをグローバル化
+
+---
+
+## ファイル構成(変更後)
+
+```
+morinoki/
+├── admin5002.html                  # [新] 管理者ログイン+ダッシュボード
+├── room.html                       # [変] 認証フローから復元キー除去
+├── index.html                      # [削除]
+├── css/main.css                    # [変] admin5002用スタイル追加
+├── js/
+│   ├── app.js                      # [変] admin5002の判定+ダッシュボード初期化
+│   ├── admin.js                    # [新] 管理者ダッシュボードのロジック
+│   ├── supabase.js                 # [変] 新RPCラッパー追加、古いものを削除
+│   ├── editor.js                   # [変] 復元キー経路削除、資格変更フロー
+│   ├── atmosphere.js               # [変] rooms.ambience.timeKeyframes を読む
+│   ├── critters.js                 # [変] rooms.ambience.birdFreq を読む
+│   └── ...
+├── supabase/migrations/
+│   ├── 015_global_admins.sql       # [新] admins テーブル、admin token 更新、create_room を admin-only に
+│   ├── 016_drop_recovery_key.sql   # [新] trees.recovery_key_hash 削除、auth_tree削除、login_tree/request_passcode_reset 修正
+│   ├── 017_pending_credential.sql  # [新] 合言葉/メール変更のメール認証化
+│   ├── 018_ambience.sql            # [新] rooms.ambience jsonb
+│   └── 019_wipe_existing.sql       # [新] 既存の全森削除(最後に実行)
+└── robots.txt                      # [新] /admin5002 を noindex
+```
+
+---
+
+## Phase 1: グローバル管理者+森作成制限
+
+**目的**: `admin5002` URL でグローバル管理者がログインでき、森の作成/削除ができるようになる。一般ユーザーの森作成経路を塞ぐ。
+
+### Migration 015_global_admins.sql
+
+```sql
+-- admins テーブル
+create table public.admins (
+  id uuid primary key default gen_random_uuid(),
+  login_id text unique not null,
+  passcode_hash text not null,
+  created_at timestamptz default now()
+);
+alter table public.admins enable row level security;
+
+-- sign_admin_token 差し替え: admin_id を payload に
+create or replace function public.sign_admin_token(p_admin_id uuid)
+returns text ...  -- 既存と同じ JWT だが payload に admin_id
+  
+-- verify_admin_token 差し替え: admin_id を返す(旧版は room_id を返していた)
+create or replace function public.verify_admin_token(p_token text)
+returns uuid ...
+
+-- admin_login 差し替え: login_id + passcode で admin_id の token を返す
+create or replace function public.admin_login(p_login_id text, p_passcode text)
+returns text ...
+
+-- set_admin_credentials: 管理者自身が自分のID・合言葉を更新
+create or replace function public.set_admin_credentials(
+  p_current_token text, p_new_login_id text, p_new_passcode text
+) returns void ...
+
+-- create_room を admin_token 必須に
+drop function public.create_room(text, text);
+create or replace function public.create_room(
+  p_admin_token text, p_slug text, p_name text
+) returns public.rooms ...
+
+-- delete_room: 管理者が森を削除(trees+nodes CASCADE)
+create or replace function public.delete_room(p_admin_token text, p_slug text)
+returns void ...
+
+-- 既存の admin 使う RPC (upsert_node/delete_node/update_tree_position/set_room_design/set_room_admin_passcode)
+-- の admin_token 検証部分を、room_id 一致判定から「グローバル管理者なら OK」に変更
+
+-- rooms.admin_passcode_hash を nullable にする(後で drop)
+alter table public.rooms alter column admin_passcode_hash drop not null;
+```
+
+### フロント
+- [ ] `admin5002.html` を作成(新ログイン画面 + ダッシュボード)
+  - ログインフォーム: login_id, passcode
+  - ログイン後: 森一覧(slug, name, 作成日, ユーザー数)、森作成フォーム、森選択 → 既存の管理画面へ
+  - `<meta name="robots" content="noindex, nofollow">` 付与
+- [ ] `js/admin.js` を新規(一覧取得、森作成/削除、各森のアドミンリンク `/r/<slug>?admin=1`)
+- [ ] `js/supabase.js` に `adminLogin(id, pw)`, `createRoomAsAdmin(token, slug, name)`, `deleteRoom(token, slug)`, `listRooms(token)` を追加
+- [ ] `js/app.js` の `initIndex()` を削除、`initAdmin5002()` を新設
+- [ ] `index.html` を削除
+- [ ] `robots.txt` を作成: `User-agent: *` / `Disallow: /admin5002`
+
+### 初期管理者登録
+(マイグレーション後に SQL で1件挿入):
+```sql
+insert into public.admins(login_id, passcode_hash) values
+  ('<任意のID>', extensions.crypt('<合言葉>', extensions.gen_salt('bf')));
+```
+
+### Vercel
+- 現 `morinoki.vercel.app` の `index.html` が404になる → 問題なし(使う人は管理者のみ)
+
+---
+
+## Phase 2: 復元キー廃止+パスワードリセット link化
+
+### Migration 016_drop_recovery_key.sql
+
+```sql
+-- login_tree: recovery_key 経路削除(passcode のみ許可)
+create or replace function public.login_tree(p_room_slug, p_name, p_passcode) ...
+
+-- request_passcode_reset: 再設定リンクメールに差し替え
+-- pending_credential_change(kind='passcode_reset', token, tree_id, expires_at)
+create or replace function public.request_passcode_reset(...) ...
+
+-- verify_passcode_reset: token と新合言葉で実反映
+create or replace function public.verify_passcode_reset(
+  p_token text, p_new_passcode text
+) returns json ...
+
+-- auth_tree 削除
+drop function public.auth_tree(uuid, text);
+
+-- trees.recovery_key_hash 削除
+alter table public.trees drop column recovery_key_hash;
+```
+
+### フロント
+- [ ] `editor.js` の「合言葉または復元キー」ラベルを「合言葉」のみに
+- [ ] `app.js` の復元キーモーダル表示を、新規登録完了画面に統合(または削除)
+- [ ] 「メールで再設定」リンクの動線を URL `/r/<slug>?reset=<token>` に
+- [ ] `app.js` の initRoom で `?reset=<token>` を検出 → 新合言葉入力モーダルを表示 → `verify_passcode_reset` を呼ぶ
+
+---
+
+## Phase 3: 合言葉・メール変更のメール認証化
+
+### Migration 017_pending_credential.sql
+
+```sql
+create table public.pending_credential_change (
+  id uuid primary key default gen_random_uuid(),
+  tree_id uuid not null references public.trees(id) on delete cascade,
+  kind text not null check (kind in ('passcode','email','passcode_reset')),
+  new_passcode_hash text,    -- passcode の場合のみ
+  new_email text,            -- email の場合のみ
+  token text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
+-- request_passcode_change: 新合言葉を受け取り、pending に保存、両方にメール
+--   現メール宛: 「変更リクエストが行われました」通知
+--   現メール宛に承認リンク(両方送信でOKと仕様決定、現メール=所有者なので合理的)
+create or replace function public.request_passcode_change(
+  p_edit_token text, p_new_passcode text, p_base_url text
+) returns json ...
+
+-- request_email_change: 新メールを受け取り、pending に保存
+--   新メール宛: 承認リンク「このアドレスで良ければクリック」
+--   現メール宛: 「変更リクエストが行われました」通知
+create or replace function public.request_email_change(
+  p_edit_token text, p_new_email text, p_base_url text
+) returns json ...
+
+-- verify_credential_change: リンクのtokenで実反映
+create or replace function public.verify_credential_change(p_token text)
+returns json ...
+
+-- update_tree_credentials 削除(直接変更を禁止)
+drop function public.update_tree_credentials(text, text, text);
+```
+
+### フロント
+- [ ] 自分のパネルの合言葉・メール変更フォームを「送信→確認メール待ち」フローに
+- [ ] 送信後「確認メールを送りました」表示
+- [ ] `app.js` で URL `?credchange=<token>` を検知 → `verify_credential_change` を呼ぶ → 成功トースト
+
+---
+
+## Phase 4: 管理者パネルのタブ化+ユーザー管理
+
+### Migration 018_user_admin_ops.sql
+
+```sql
+-- admin_list_users: 指定森のユーザー一覧(管理者のみ)
+create or replace function public.admin_list_users(
+  p_admin_token text, p_room_slug text
+) returns table(tree_id uuid, name text, email text, created_at timestamptz, node_count int) ...
+
+-- admin_delete_user: 指定ユーザー(tree)を削除
+create or replace function public.admin_delete_user(
+  p_admin_token text, p_tree_id uuid
+) returns void ...
+
+-- admin_reset_user_passcode: ランダム合言葉生成→ユーザーのメール宛に「管理者が発行した一時合言葉」を送信
+create or replace function public.admin_reset_user_passcode(
+  p_admin_token text, p_tree_id uuid
+) returns json ...
+
+-- admin_set_user_email: メール直接変更(管理者特権)
+create or replace function public.admin_set_user_email(
+  p_admin_token text, p_tree_id uuid, p_new_email text
+) returns void ...
+```
+
+### フロント
+- [ ] `editor.js` の管理者パネルを**タブ化**: ユーザー管理 / デザイン / ゆらぎ / 背景ギミック / ツール
+- [ ] ユーザー管理タブ: 一覧、行クリックで詳細、削除ボタン、合言葉リセット、メール変更
+- [ ] デザインタブ: 既存の9項目スライダー
+- [ ] ゆらぎタブ: 既存の3項目スライダー
+- [ ] ツールタブ: タイムラプス、CSVエクスポート
+
+---
+
+## Phase 5: 背景・ギミック管理
+
+### Migration 019_ambience.sql
+
+```sql
+alter table public.rooms add column if not exists ambience jsonb default '{}'::jsonb;
+
+-- set_room_ambience: 管理者が森の背景・ギミック設定を更新
+create or replace function public.set_room_ambience(
+  p_admin_token text, p_slug text, p_ambience jsonb
+) returns jsonb ...
+```
+
+### ambience 構造(初期値)
+```json
+{
+  "timeCurve": "auto",            // "auto" or "night" or "noon" など固定
+  "season": "auto",               // "auto" | "spring" | "summer" | "autumn" | "winter"
+  "birdFreq": 0.5,                // 0..1 (出現頻度倍率)
+  "canopyDensity": 0.5            // 0..1 (背景森影の密度)
+}
+```
+
+### フロント
+- [ ] `js/atmosphere.js`: `atmosphereAt(date, ambience)` に変更、時間帯/季節固定を反映
+- [ ] `js/critters.js`: Critters に ambience を渡し、spawn 間隔を ambience.birdFreq で制御
+- [ ] `drawBackgroundCanopies`: canopy 数に ambience.canopyDensity を乗算
+- [ ] `editor.js` の背景ギミックタブ: 4項目のスライダー+セレクト
+- [ ] `app.js` が state.ambience を forest/critters/atmosphere に渡す
+
+---
+
+## Phase 6(最終): 既存データの削除
+
+### Migration 020_wipe_existing.sql
+
+```sql
+-- ロールバック不可のため最終実行
+delete from public.nodes;
+delete from public.pending_registrations;
+delete from public.pending_credential_change;
+delete from public.mail_outbox;
+delete from public.trees;
+delete from public.rooms;
+
+-- admins は作成済の初期管理者だけ残す
+```
+
+- [ ] Phase 1〜5 が本番で動作確認済みになったあと、Phase 6 を実行
+- [ ] その後、管理者が新しい森を作成して運用開始
+
+---
+
+## 実装順序と確認ポイント
+
+| Phase | 完了条件 | ユーザー確認ポイント |
+|---|---|---|
+| 1 | `/admin5002` でログイン・森作成・森削除ができる | 自分で管理者IDと合言葉を決めて設定 |
+| 2 | 復元キー画面が消え、パスワード忘れ→メール→リンクで新合言葉設定できる | テストアカウントでリセットフロー確認 |
+| 3 | 合言葉/メール変更がメール認証経由になる | 両方の通知メールが届くこと |
+| 4 | 管理者パネルでユーザー一覧・削除・合言葉リセットができる | 管理操作の画面確認 |
+| 5 | 管理者が時間帯/季節/鳥頻度/森影を変えると森の見た目が変わる | スライダー操作で即反映 |
+| 6 | 既存の森が全削除される | 管理者で新しい森を作り直して運用 |
+
+---
+
+## リスクと注意
+
+- **既存の session**: Phase 6 で全森削除するため、既にログイン中のユーザーは自動的にセッション切れ。これは許容
+- **Phase 1 と 6 の間で運用再開する場合**: 既存森は残るがユーザーは新規登録できない期間が発生
+- **管理者の初期登録**: `admins` テーブルへの初回 INSERT は SQL Editor から行う。Phase 1 デプロイ直後に私が SQL を実行
+- **admin5002 URL の秘匿**: `robots.txt` + `noindex` で検索避け。UA 制限までは不要(秘匿性より単純さ優先)
+
+---
+
+## 実装前の最終確認事項
+
+1. **Q8(ユーザー管理)の確定**: 一覧・削除・合言葉リセット・メール変更の4機能で良いか?(他に必要なものがあれば追加)
+2. **管理者の初期 ID と合言葉**: Phase 1 デプロイ直後にこちらで SQL 実行で登録します。どんな ID/合言葉にしますか?(合言葉はメモ推奨。忘れると管理機能が使えなくなります)
+3. **Phase 6 の既存森全削除のタイミング**: Phase 1〜5 完了直後? それとも Phase 1 開始前(旧仕様を完全にリセット)?
+
+この3点に回答いただければ、Phase 1 から順次実装を開始します。

@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /admin5002
+Disallow: /admin5002.html

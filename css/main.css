@@ -260,6 +260,45 @@ body.panel-hidden .forest-container { inset: 0; }
   .timelapse-bar { left: 10px; right: 10px; bottom: calc(50vh + 60px); }
   .tl-label { min-width: 80px; font-size: 0.72rem; }
 }
+/* === admin5002 ページ === */
+body.page-admin {
+  display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; padding: 2rem 1rem;
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(200,149,102,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 100%, rgba(111,138,125,0.08) 0%, transparent 60%),
+    linear-gradient(180deg, #f7f4ee 0%, #e6e0d4 100%);
+}
+.admin-entry { width: 100%; max-width: 620px; }
+.admin-box {
+  background: rgba(252,250,246,0.92); padding: 1.8rem 1.6rem;
+  border: 1px solid rgba(82,97,110,0.15); box-shadow: 0 6px 30px rgba(30,42,51,0.06);
+  display: flex; flex-direction: column; gap: 0.8rem;
+}
+.admin-title { font-family: 'Shippori Mincho', serif; color: var(--moss-deep); font-size: 1.6rem; letter-spacing: 0.12em; }
+.admin-subtitle { font-family: 'Klee One', serif; color: var(--ink-soft); font-size: 0.9rem; letter-spacing: 0.15em; }
+.admin-label { font-family: 'Klee One', serif; font-size: 0.8rem; color: var(--ink-soft); letter-spacing: 0.06em; }
+.admin-box input[type="text"], .admin-box input[type="password"] {
+  padding: 0.6rem 0.8rem; font-family: 'Shippori Mincho', serif; font-size: 0.95rem;
+  border: 1px solid rgba(82,97,110,0.25); background: white; outline: none;
+}
+.admin-box input:focus { border-color: var(--moss); }
+.admin-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1px solid rgba(82,97,110,0.15); padding-bottom: 0.7rem; margin-bottom: 0.5rem; }
+.admin-section { border-top: 1px dashed rgba(82,97,110,0.15); padding-top: 0.9rem; margin-top: 0.3rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.admin-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
+.admin-section h2 { font-family: 'Shippori Mincho', serif; font-size: 1.08rem; color: var(--ink); letter-spacing: 0.08em; }
+.admin-form { display: flex; flex-direction: column; gap: 0.4rem; }
+.admin-hint { font-family: 'Klee One', serif; font-size: 0.78rem; color: var(--ink-soft); }
+.room-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
+.room-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.6rem 0.8rem; background: rgba(252,250,246,0.7);
+  border: 1px solid rgba(82,97,110,0.12); gap: 0.8rem;
+}
+.room-name { font-family: 'Shippori Mincho', serif; font-size: 1rem; color: var(--ink); }
+.room-meta { font-family: 'Klee One', serif; font-size: 0.76rem; color: var(--ink-soft); margin-top: 0.15rem; }
+.room-actions { display: flex; gap: 0.4rem; align-items: center; }
+.room-actions .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; text-decoration: none; display: inline-block; }
+
 .auth-tabs { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
 .auth-tab {
   flex: 1; padding: 0.45rem 0.6rem; border-radius: 6px;

@@ -1,12 +1,16 @@
 import { api } from './supabase.js';
-import { isValidSlug, randomSlug } from './utils.js';
 import { mergeDesign } from './designconfig.js';
 
-const isIndex = document.body.classList.contains('page-index');
+const isAdmin = document.body.classList.contains('page-admin');
 const isRoom = document.body.classList.contains('page-room');
 
-if (isIndex) initIndex();
+if (isAdmin) initAdminPage();
 if (isRoom) initRoom();
+
+async function initAdminPage() {
+  const { initAdmin } = await import('./admin.js');
+  await initAdmin();
+}
 
 function fitForestToView(canvas, state) {
   if (!state.trees.length) return;
@@ -25,41 +29,6 @@ function fitForestToView(canvas, state) {
   state.view = { ox: W / 2 - cx * scale, oy: H / 2 - cy * scale, scale };
 }
 
-function initIndex() {
-  const form = document.getElementById('create-form');
-  const created = document.getElementById('created');
-  const createdUrl = document.getElementById('created-url');
-  const openBtn = document.getElementById('open-forest');
-  const copyBtn = document.getElementById('copy-url');
-  const errBox = document.getElementById('error');
-  const slugInput = document.getElementById('forest-slug');
-
-  if (!slugInput.value) slugInput.value = randomSlug();
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    errBox.classList.add('hidden');
-    const name = document.getElementById('forest-name').value.trim();
-    const slug = slugInput.value.trim().toLowerCase();
-    if (!isValidSlug(slug)) return showError('URLは英小文字・数字・ハイフンで3〜40文字');
-    try {
-      await api.createRoom(slug, name);
-      const url = `${location.origin}/r/${slug}`;
-      createdUrl.textContent = url;
-      openBtn.href = url;
-      created.classList.remove('hidden');
-      form.classList.add('hidden');
-    } catch (err) { showError(err.message || String(err)); }
-  });
-
-  copyBtn.addEventListener('click', async () => {
-    await navigator.clipboard.writeText(createdUrl.textContent);
-    copyBtn.textContent = 'コピーしました';
-    setTimeout(() => copyBtn.textContent = 'URLをコピー', 1500);
-  });
-  function showError(msg){ errBox.textContent = msg; errBox.classList.remove('hidden'); }
-}
-
 async function initRoom() {
   const { createForest, layoutRandom } = await import('./forest.js');
   const { renderInfoPanel, exportForestCsv } = await import('./editor.js');
@@ -69,10 +38,9 @@ async function initRoom() {
   const { atmosphereAt } = await import('./atmosphere.js');
   const { showToast, showError, setConnectionStatus } = await import('./toast.js');
 
-  // /r/:slug (通常) または /a/:slug (管理者モード) または ?slug=xxx&admin=1
-  const urlMatch = location.pathname.match(/\/(r|a)\/([^\/]+)/);
-  const slug = urlMatch?.[2] || new URLSearchParams(location.search).get('slug');
-  const isAdminPath = urlMatch?.[1] === 'a' || new URLSearchParams(location.search).get('admin') === '1';
+  // /r/:slug
+  const urlMatch = location.pathname.match(/\/r\/([^\/]+)/);
+  const slug = urlMatch?.[1] || new URLSearchParams(location.search).get('slug');
   if (!slug) {
     const t = await import('./toast.js');
     t.showError('ルームが指定されていません');
@@ -81,7 +49,7 @@ async function initRoom() {
 
   const state = {
     room: null, trees: [], session: null, selfTreeId: null,
-    adminToken: null, isAdminMode: isAdminPath,
+    adminToken: null,
     onTrunkTap: null, onNodeTap: null, onEmptyTap: null,
     onTreeMoved: null, onNodeMoved: null,
     view: null,
@@ -89,8 +57,8 @@ async function initRoom() {
     atmo: atmosphereAt(),
     design: mergeDesign(null),
   };
-  // 既存 admin token を復元
-  const ADMIN_KEY = 'mori.admin.' + slug;
+  // グローバル管理者トークンを復元(/admin5002 でログインしてれば有効)
+  const ADMIN_KEY = 'mori.admin.global.token';
   const savedAdmin = localStorage.getItem(ADMIN_KEY);
   if (savedAdmin) state.adminToken = savedAdmin;
 
@@ -178,18 +146,12 @@ async function initRoom() {
       catch (e) { showError(e, 'CSV書き出しに失敗しました'); }
     },
     onTimelapse: () => startTimelapse(),
-    onAdminLogin: async (passcode) => {
-      const token = await api.adminLogin(slug, passcode);
-      state.adminToken = token;
-      localStorage.setItem(ADMIN_KEY, token);
-      updatePanel(); forest.render();
-      showToast('管理者としてログインしました', 'success');
-    },
     onAdminLogout: () => {
+      // グローバル管理者ログアウト: localStorageを消して/admin5002へ
       state.adminToken = null;
       localStorage.removeItem(ADMIN_KEY);
-      updatePanel(); forest.render();
       showToast('管理者ログアウト', 'success');
+      location.href = '/admin5002';
     },
     onDesignPreview: (nextDesign) => {
       state.design = mergeDesign(nextDesign);
@@ -199,18 +161,8 @@ async function initRoom() {
       state.design = mergeDesign(nextDesign);
       forest.render();
       if (!state.adminToken) return;
-      try { await api.setRoomDesign(state.adminToken, state.design); }
+      try { await api.setRoomDesign(state.adminToken, state.room.slug, state.design); }
       catch (e) { showError(e, 'デザイン保存に失敗しました'); }
-    },
-    onAdminChangePw: async () => {
-      const cur = prompt('現在の管理者合言葉(既定は admin)');
-      if (cur == null) return;
-      const nw = prompt('新しい管理者合言葉(4文字以上)');
-      if (!nw) return;
-      try {
-        await api.setAdminPasscode(slug, cur, nw);
-        showToast('管理者合言葉を変更しました', 'success');
-      } catch (e) { showError(e, '変更失敗'); }
     },
     onAuthLogin: async ({ name, passcode }) => {
       const res = await api.loginTree(state.room.slug, name, passcode);

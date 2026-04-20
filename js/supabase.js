@@ -28,7 +28,19 @@ function rpc(name, args) {
 }
 
 export const api = {
-  createRoom: (slug, name) => rpc('create_room', { p_slug: slug, p_name: name }),
+  // 森作成はグローバル管理者のみ(admin_token必須)
+  createRoom: (adminToken, slug, name) =>
+    rpc('create_room', { p_admin_token: adminToken, p_slug: slug, p_name: name }),
+  deleteRoom: (adminToken, slug) =>
+    rpc('delete_room', { p_admin_token: adminToken, p_slug: slug }),
+  listRooms: (adminToken) =>
+    rpc('list_rooms', { p_admin_token: adminToken }),
+  setAdminCredentials: (currentToken, newLoginId, newPasscode) =>
+    rpc('set_admin_credentials', {
+      p_current_token: currentToken,
+      p_new_login_id: newLoginId,
+      p_new_passcode: newPasscode,
+    }),
   createTree: (roomSlug, name, passcode, email) =>
     rpc('create_tree', { p_room_slug: roomSlug, p_name: name, p_passcode: passcode, p_email: email || null }),
   authTree: (treeId, secret) =>
@@ -54,11 +66,10 @@ export const api = {
     }),
   requestPasscodeReset: (roomSlug, name) =>
     rpc('request_passcode_reset', { p_room_slug: roomSlug, p_name: name }),
-  adminLogin: (slug, passcode) => rpc('admin_login', { p_slug: slug, p_passcode: passcode }),
-  setAdminPasscode: (slug, currentPw, newPw) =>
-    rpc('set_admin_passcode', { p_slug: slug, p_current_passcode: currentPw, p_new_passcode: newPw }),
-  setRoomDesign: (adminToken, design) =>
-    rpc('set_room_design', { p_admin_token: adminToken, p_design: design }),
+  adminLogin: (loginId, passcode) =>
+    rpc('admin_login', { p_login_id: loginId, p_passcode: passcode }),
+  setRoomDesign: (adminToken, slug, design) =>
+    rpc('set_room_design', { p_admin_token: adminToken, p_slug: slug, p_design: design }),
   upsertNode: (token, treeId, node) => {
     const args = {
       p_edit_token: token, p_tree_id: treeId,
