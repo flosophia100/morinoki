@@ -171,13 +171,13 @@ function idleHTML(state) {
           <p id="auth-reset-msg" class="ip-hint hidden" style="font-size:0.8rem;margin-top:0.4rem;color:var(--moss-deep)"></p>
           <p id="auth-reset-error" class="error hidden"></p>
         ` : `
-          <p class="ip-desc" style="margin-bottom:0.4rem">この森に新しい樹を植えます。名前は後から変更できません。確認メールのリンクで本登録を完了します。</p>
-          <label class="mini-label">名前</label>
-          <input id="auth-name" type="text" maxlength="20" placeholder="あなたの名前 / ニックネーム" autocomplete="off">
-          <label class="mini-label">合言葉(4桁以上)</label>
-          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉">
-          <label class="mini-label">メール(必須)</label>
-          <input id="auth-email" type="email" autocomplete="off" placeholder="you@example.com" required>
+          <p class="ip-desc" style="margin-bottom:0.4rem">森にあなたの樹を植えます。メールアドレスに送信されたリンクのクリックで登録が完了します。</p>
+          <label class="mini-label">ニックネーム【必須】</label>
+          <input id="auth-name" type="text" maxlength="20" autocomplete="off">
+          <label class="mini-label">合言葉(パスワード)※ 4文字以上【必須】</label>
+          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off">
+          <label class="mini-label">メールアドレス【必須】</label>
+          <input id="auth-email" type="email" autocomplete="off" required>
           <button data-action="auth-plant" class="btn-primary w-full" style="margin-top:0.6rem">登録メールを送る</button>
           <p id="auth-error" class="error hidden"></p>
           <p id="auth-pending" class="ip-hint hidden" style="font-size:0.8rem;margin-top:0.4rem;color:var(--moss-deep)"></p>
