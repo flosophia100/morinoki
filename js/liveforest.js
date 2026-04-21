@@ -1,5 +1,6 @@
 import { stringHash } from './utils.js';
 import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './nodesim.js';
+import { trunkRadiusFor } from './tree.js';
 
 // 最小構成の「生きている森」シミュレータ
 //   - 幹は低周波の sway を **直接代入** (_swayX/Y)。drift / 累積力なし
@@ -74,6 +75,36 @@ export class LiveForest {
         t._swayY = sy;
       }
     });
+
+    // 幹同士の hard separation(2反復、_swayX/Y を直接補正)
+    //   rest(= t.x) + sway で表示位置を計算し、近すぎれば半々で押し離す
+    const TRUNK_ITER = 2;
+    const TRUNK_BUFFER = 1.1;   // 最小距離 = (ra + rb) * 1.1
+    const TRUNK_PUSH_CAP = 50;  // 1反復の最大補正
+    const design0 = design; // scope
+    for (let iter = 0; iter < TRUNK_ITER; iter++) {
+      for (let i = 0; i < trees.length; i++) {
+        const A = trees[i];
+        const ra = trunkRadiusFor(A, 1, design0 || undefined);
+        const ax = A.x + (A._swayX || 0);
+        const ay = A.y + (A._swayY || 0);
+        for (let j = i + 1; j < trees.length; j++) {
+          const B = trees[j];
+          const rb = trunkRadiusFor(B, 1, design0 || undefined);
+          const minD = (ra + rb) * TRUNK_BUFFER;
+          const bx = B.x + (B._swayX || 0);
+          const by = B.y + (B._swayY || 0);
+          const dx = bx - ax, dy = by - ay;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= minD * minD || d2 < 0.0001) continue;
+          const d = Math.sqrt(d2);
+          const push = Math.min(TRUNK_PUSH_CAP, (minD - d) / 2);
+          const ux = dx / d, uy = dy / d;
+          if (!A._dragging) { A._swayX -= ux * push; A._swayY -= uy * push; }
+          if (!B._dragging) { B._swayX += ux * push; B._swayY += uy * push; }
+        }
+      }
+    }
 
     // 成長アニメ + 表示位置の合成
     const now = this.now();

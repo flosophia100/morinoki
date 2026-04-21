@@ -197,14 +197,24 @@ windMul  = nodeShimmer * 2.0
 
 ### 重なり防止(hard separation)
 
-`sway` 代入後、全ノードペアを2反復チェック。位置は **`_restX + simDX`** を使う
-(`n._x` には前フレームの simDX が既に畳み込まれているため使うと二重加算になる)。
+ノード・幹の両方で同じアルゴリズム(最小距離を下回っていれば半々で押し離す、2反復)を適用する。
 
+**ノード** (`js/nodesim.js`): 位置は **`_restX + simDX`** を使う
+(`n._x` には前フレームの simDX が既に畳み込まれているため使うと二重加算になる)。
 ```
 minD  = (ra + rb) * 1.06         半径は n._r(描画半径)
 push  = min(40, (minD - d) / 2)  1反復の上限 40px
 simDX を ±push で直接上書き
 ```
+
+**幹** (`js/liveforest.js`): 位置は `tree.x + _swayX`、半径は `trunkRadiusFor()`。
+```
+minD  = (ra + rb) * 1.10         幹は余白を厚めに
+push  = min(50, (minD - d) / 2)  1反復の上限 50px
+_swayX を ±push で直接上書き
+```
+
+どちらも DB 位置 (`tree.x/y`, `offset_x/y`) は触らない。_sway / simDX を介した視覚補正のみ。
 
 ### rest 位置の配置(兄弟重なり予防)
 
@@ -235,11 +245,18 @@ baseLen     = max(defaultLen, requiredLen)
 | `nodeDrift` | 葉の基本振幅 |
 | `nodeSwayDepth` | 深い階層ほど振幅増幅 |
 
+### その他の約束事
+
+- **幹の大きさは名前の長さに関わらず一定**(`TRUNK_BASE_R = 54`、`trunkSize` のみで調整)
+- **自分の幹=`#c89566`(warm amber)、他人の幹=`#6f8a7d`(cool sage)**
+- **新規枝ノードの初期色は所属する幹の色と同じ**(`trunkColorFor(isSelf)`)
+  子ノードは親ノードの色を継承
+
 ### 廃止済みの機構
 
 - サイズ脈動(`nodePulseAmp/Speed`) — ゆらぎは位置のみ
 - 文言類似による引力(`textAffinity`) — 最小構成では計算しない
-- 樹間の累積 drift、類似樹の引力、中心引力、樹間斥力 — 全廃
+- 樹間の累積 drift、類似樹の引力、中心引力 — 全廃(樹間斥力は hard separation に置換)
 - ノードの spring / charge / wind velocity / インパルス — 全廃
 
 ### 決定論性

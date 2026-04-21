@@ -584,9 +584,13 @@ function wireOwnTree(el, state, tree, cb) {
   async function addOne() {
     const txt = input.value.trim();
     if (!txt) return;
+    // 新規枝ノードの初期色は幹の色と同じに(isSelf で切替)
+    const { trunkColorFor } = await import('./tree.js');
+    const isSelf = tree.id === state.selfTreeId;
+    const initColor = trunkColorFor(isSelf);
     try {
       const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
-        text: txt, size: 3, color: PALETTE[0],
+        text: txt, size: 3, color: initColor,
         ord: (tree.nodes || []).filter(n => !n.parent_id).length,
         parent_id: null
       });

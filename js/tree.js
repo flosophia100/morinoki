@@ -295,12 +295,16 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0, design = DESIGN_D
   return out;
 }
 
+// 幹の大きさは名前の長さに関わらず一定。design.trunkSize (0..1) で ×0.7〜×1.35
+export const TRUNK_BASE_R = 54;
 export function trunkRadiusFor(tree, scale = 1.0, design = DESIGN_DEFAULTS) {
-  const name = tree.name || '';
-  const base = Math.max(38, Math.min(72, 34 + name.length * 7));
-  // design.trunkSize (0..1) を 0.7..1.35 倍にマップ
   const trunkMul = 0.7 + design.trunkSize * 0.65;
-  return base * scale * trunkMul;
+  return TRUNK_BASE_R * scale * trunkMul;
+}
+
+// 幹の色を isSelf で返す(新規ノードの初期色にも使う)
+export function trunkColorFor(isSelf) {
+  return isSelf ? '#c89566' : '#6f8a7d';
 }
 
 export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
