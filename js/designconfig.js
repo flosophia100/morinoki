@@ -13,9 +13,11 @@ export const DEFAULTS = {
   trunkSize: 0.5,     // 幹サイズ(0=小, 1=大)
   branchThickness: 0.5, // 枝の太さ(0=細い, 1=太い)
   branchMeander: 0.5, // 枝の蛇行度(0=直線, 1=大きく曲がる)
-  shimmerAmp: 0.5,    // ゆらぎ振幅(0=静止, 1=大きく揺れる)
-  shimmerSpeed: 0.5,  // ゆらぎ速さ(0=ゆっくり, 1=早い)
-  nodeShimmer: 0.5,   // ノード個別のゆらぎ量(0=静止, 1=強い)
+  shimmerAmp: 0.5,      // 幹の漂い・振れ幅(0=ほぼ静止, 1=フィールドを広く漂う)
+  shimmerSpeed: 0.5,    // 幹の漂い・速さ(0=ゆっくり, 1=速い)
+  nodeShimmer: 0.4,     // ノード個別のゆらぎ(位置)
+  nodePulseAmp: 0.4,    // ノードの伸縮・幅(0=同じ大きさ, 1=大きく伸縮)
+  nodePulseSpeed: 0.4,  // ノードの伸縮・速さ
 };
 
 // サーバから取得した design を DEFAULTS とマージ
@@ -90,7 +92,9 @@ export const META = [
   { key: 'spikeLen',        label: '外周スパイクの長さ' },
   { key: 'branchThickness', label: '枝の太さ' },
   { key: 'branchMeander',   label: '枝の蛇行度' },
-  { key: 'shimmerAmp',      label: '樹のゆらぎ(振幅)' },
-  { key: 'shimmerSpeed',    label: '樹のゆらぎ(速さ)' },
-  { key: 'nodeShimmer',     label: 'ノードのゆらぎ' },
+  { key: 'shimmerAmp',      label: '幹の漂い(距離)' },
+  { key: 'shimmerSpeed',    label: '幹の漂い(速さ)' },
+  { key: 'nodeShimmer',     label: 'ノードのゆらぎ(位置)' },
+  { key: 'nodePulseAmp',    label: 'ノードの伸縮(幅)' },
+  { key: 'nodePulseSpeed',  label: 'ノードの伸縮(速さ)' },
 ];

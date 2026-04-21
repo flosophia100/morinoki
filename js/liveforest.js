@@ -78,22 +78,25 @@ export class LiveForest {
 
   tick() {
     const design = this.getDesign() || null;
-    // design.shimmerSpeed: 0..1 → 時間ステップ 0.006..0.030(0.5中立で0.016)
+    // design.shimmerSpeed: 0..1 → 時間ステップ 0.006..0.03
     const speedMul = design ? (0.4 + design.shimmerSpeed * 1.2) : 1.0;
     this.t += 0.016 * speedMul;
-    // design.shimmerAmp: 0..1 → 振幅 0.0..2.0(0.5中立で1.0)
-    const ampMul = design ? (design.shimmerAmp * 2.0) : 1.0;
+    // design.shimmerAmp: 0..1 → 振幅倍率 0.25..3.0 (0.5中立で1.6)
+    const ampMul = design ? (0.25 + design.shimmerAmp * 2.75) : 1.6;
     const trees = this.getTrees();
 
-    // 風: 位相ずれでゆらぎ(ドラッグ中の樹はスキップ)
+    // 幹の漂い(roam): 低周波・大振幅で2周期重ねて複雑な軌跡に
+    //   shimmerAmp=0.5: 水平 ±450px、垂直 ±360px くらいを60秒周期で回遊
     trees.forEach(t => {
       this.ensureInit(t);
       if (t._dragging) { t._windX = 0; t._windY = 0; return; }
       const seed = Number(t.seed) || stringHash(t.name || 'x');
       const pX = (seed % 1009) * 0.01;
       const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
-      const windX = (Math.sin(this.t * 0.6 + pX) * 11 + Math.sin(this.t * 0.25 + pX * 1.7) * 4.5) * ampMul;
-      const windY = (Math.cos(this.t * 0.52 + pY) * 9 + Math.cos(this.t * 0.21 + pY * 1.3) * 4.0) * ampMul;
+      const windX = (Math.sin(this.t * 0.11 + pX) * 320
+                   + Math.sin(this.t * 0.055 + pX * 1.7) * 140) * ampMul;
+      const windY = (Math.cos(this.t * 0.09 + pY) * 250
+                   + Math.cos(this.t * 0.045 + pY * 1.3) * 110) * ampMul;
       t._windX = windX;
       t._windY = windY;
     });
@@ -119,20 +122,20 @@ export class LiveForest {
       p.b._driftY -= my * 4;
     });
 
-    // 斥力(近すぎる樹を押し戻す) — 絡まり防止。強めに
+    // 斥力: 漂う表示位置(x+drift+wind)で判定し、近すぎたら強く押し離す
     for (let i = 0; i < trees.length; i++) {
       for (let j = i + 1; j < trees.length; j++) {
         const A = trees[i], B = trees[j];
-        const ax = A.x + (A._driftX || 0);
-        const ay = A.y + (A._driftY || 0);
-        const bx = B.x + (B._driftX || 0);
-        const by = B.y + (B._driftY || 0);
+        const ax = A.x + (A._driftX || 0) + (A._windX || 0);
+        const ay = A.y + (A._driftY || 0) + (A._windY || 0);
+        const bx = B.x + (B._driftX || 0) + (B._windX || 0);
+        const by = B.y + (B._driftY || 0) + (B._windY || 0);
         const dx = bx - ax, dy = by - ay;
         const d2 = dx*dx + dy*dy;
-        const min = 220;
+        const min = 260;
         if (d2 < min*min && d2 > 1) {
           const d = Math.sqrt(d2);
-          const push = (min - d) * 0.12 / d;
+          const push = (min - d) * 0.24 / d;  // 強めに
           A._driftX -= dx * push;
           A._driftY -= dy * push;
           B._driftX += dx * push;
@@ -141,11 +144,12 @@ export class LiveForest {
       }
     }
 
-    // driftにdampingを効かせて暴れを抑える(緩やかに)
+    // drift ダンピング。漂いで他ノードに押し出された余力を保持、
+    //   過大になったら緩やかにクランプ
     trees.forEach(t => {
-      t._driftX *= 0.992;
-      t._driftY *= 0.992;
-      const maxDrift = 260;
+      t._driftX *= 0.995;
+      t._driftY *= 0.995;
+      const maxDrift = 700;
       if (t._driftX > maxDrift) t._driftX = maxDrift;
       if (t._driftX < -maxDrift) t._driftX = -maxDrift;
       if (t._driftY > maxDrift) t._driftY = maxDrift;

@@ -324,15 +324,18 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     );
   });
 
-  // 葉ノード(放射状バースト)
+  // 葉ノード(放射状バースト、呼吸のように伸縮)
   positions.forEach(p => {
     const n = p.node;
     const nSeed = stringHash(n.id || n.text || 'node');
     const col = n.color || '#6f8a7d';
     const strokeCol = darken(col, 0.4);
-    drawRadialBurst(ctx, p.x, p.y, p.nr, nSeed, col, strokeCol, {
+    const sizeScale = n._sizeScale ?? 1;
+    const effR = p.nr * sizeScale;
+    drawRadialBurst(ctx, p.x, p.y, effR, nSeed, col, strokeCol, {
       densityMul: 1.1, design
     });
+    p.nr = effR;  // 以降のラベル配置・ヒット判定で使う表示半径
 
     if (n.description) {
       ctx.save();

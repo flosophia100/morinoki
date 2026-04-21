@@ -22,6 +22,9 @@ const CFG = {
 export function tickNodeSim(trees, t, design = null) {
   // design.nodeShimmer: 0..1 → 風のamp倍率 0..2(0.5中立で1.0)
   const windMul = design ? (design.nodeShimmer * 2.0) : 1.0;
+  // ノードの伸縮 pulse(sizeScale 計算用)
+  const pulseAmp   = design ? (design.nodePulseAmp   ?? 0.4) : 0.4;   // 0..1 → 0..0.35振幅
+  const pulseSpeed = design ? (design.nodePulseSpeed ?? 0.4) : 0.4;   // 0..1 → 0.15..1.3周期
   // 全ノードを集める
   const all = [];
   trees.forEach(tree => {
@@ -68,15 +71,22 @@ export function tickNodeSim(trees, t, design = null) {
     }
   }
 
-  // 3) per-node wind(個別位相)
+  // 3) per-node wind(個別位相) + sizePulse
+  const pulseFreq = 0.15 + pulseSpeed * 1.15;
+  const pulseAmpl = pulseAmp * 0.35; // 0..0.35
   for (const { n } of all) {
-    if (n._dragging) continue;
     const seed = (n.id && n.id.charCodeAt ? n.id.charCodeAt(0) : 0) + (n.text?.length || 0);
     const ph = seed * 0.17;
-    const wx = (Math.sin(t * 0.95 + ph) * CFG.WIND_AMP + Math.sin(t * 0.32 + ph * 2.1) * CFG.WIND_AMP * 0.5) * windMul;
-    const wy = (Math.cos(t * 0.82 + ph * 1.3) * CFG.WIND_AMP + Math.cos(t * 0.27 + ph) * CFG.WIND_AMP * 0.5) * windMul;
-    n.vx += wx * 0.06;
-    n.vy += wy * 0.06;
+    // 位置風(既存)
+    if (!n._dragging) {
+      const wx = (Math.sin(t * 0.95 + ph) * CFG.WIND_AMP + Math.sin(t * 0.32 + ph * 2.1) * CFG.WIND_AMP * 0.5) * windMul;
+      const wy = (Math.cos(t * 0.82 + ph * 1.3) * CFG.WIND_AMP + Math.cos(t * 0.27 + ph) * CFG.WIND_AMP * 0.5) * windMul;
+      n.vx += wx * 0.06;
+      n.vy += wy * 0.06;
+    }
+    // 伸縮 pulse: 独立位相で呼吸のように大小
+    const pPh = ph * 1.7 + ((n.text?.charCodeAt(0) || 0) * 0.31);
+    n._sizeScale = 1 + Math.sin(t * pulseFreq + pPh) * pulseAmpl;
   }
 
   // 4) 積分 + ダンピング + 速度キャップ
