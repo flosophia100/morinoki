@@ -60,14 +60,26 @@ export const api = {
     }),
   verifyRegistration: (token) =>
     rpc('verify_registration', { p_token: token }),
-  updateTreeCredentials: (editToken, newPasscode, newEmail) =>
-    rpc('update_tree_credentials', {
-      p_edit_token: editToken,
-      p_new_passcode: newPasscode == null ? null : newPasscode,
-      p_new_email: newEmail === undefined ? null : newEmail,
-    }),
-  requestPasscodeReset: (roomSlug, name) =>
-    rpc('request_passcode_reset', { p_room_slug: roomSlug, p_name: name }),
+  requestPasscodeReset: (roomSlug, name, baseUrl) =>
+    rpc('request_passcode_reset', { p_room_slug: roomSlug, p_name: name, p_base_url: baseUrl || null }),
+  verifyPasscodeReset: (token, newPasscode) =>
+    rpc('verify_passcode_reset', { p_token: token, p_new_passcode: newPasscode }),
+  requestPasscodeChange: (editToken, newPasscode, baseUrl) =>
+    rpc('request_passcode_change', { p_edit_token: editToken, p_new_passcode: newPasscode, p_base_url: baseUrl || null }),
+  requestEmailChange: (editToken, newEmail, baseUrl) =>
+    rpc('request_email_change', { p_edit_token: editToken, p_new_email: newEmail, p_base_url: baseUrl || null }),
+  verifyCredentialChange: (token) =>
+    rpc('verify_credential_change', { p_token: token }),
+  adminListUsers: (adminToken, roomSlug) =>
+    rpc('admin_list_users', { p_admin_token: adminToken, p_room_slug: roomSlug }),
+  adminDeleteUser: (adminToken, treeId) =>
+    rpc('admin_delete_user', { p_admin_token: adminToken, p_tree_id: treeId }),
+  adminResetUserPasscode: (adminToken, treeId) =>
+    rpc('admin_reset_user_passcode', { p_admin_token: adminToken, p_tree_id: treeId }),
+  adminSetUserEmail: (adminToken, treeId, newEmail) =>
+    rpc('admin_set_user_email', { p_admin_token: adminToken, p_tree_id: treeId, p_new_email: newEmail }),
+  setRoomAmbience: (adminToken, slug, ambience) =>
+    rpc('set_room_ambience', { p_admin_token: adminToken, p_slug: slug, p_ambience: ambience }),
   adminLogin: (loginId, passcode) =>
     rpc('admin_login', { p_login_id: loginId, p_passcode: passcode }),
   setRoomDesign: (adminToken, slug, design) =>

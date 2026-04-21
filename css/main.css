@@ -299,6 +299,28 @@ body.page-admin {
 .room-actions { display: flex; gap: 0.4rem; align-items: center; }
 .room-actions .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; text-decoration: none; display: inline-block; }
 
+/* 管理者タブ */
+.admin-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.admin-tab {
+  padding: 0.35rem 0.55rem; font-size: 0.76rem; letter-spacing: 0.05em;
+  font-family: 'Klee One', serif; color: var(--ink-soft);
+  background: rgba(82,97,110,0.06); border: 1px solid rgba(82,97,110,0.18); cursor: pointer;
+}
+.admin-tab.on { background: var(--moss); color: var(--paper); border-color: var(--moss); }
+.admin-user-list { list-style: none; display: flex; flex-direction: column; gap: 0.4rem; margin: 0.3rem 0 0 0; }
+.admin-user-item {
+  padding: 0.5rem 0.6rem; background: rgba(252,250,246,0.7);
+  border: 1px solid rgba(82,97,110,0.12);
+}
+.admin-user-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.4rem; }
+.admin-user-meta { font-family: 'Klee One', serif; font-size: 0.72rem; color: var(--ink-soft); }
+.admin-user-email { font-family: 'Klee One', serif; font-size: 0.78rem; color: var(--ink-soft); margin: 0.15rem 0 0.35rem; word-break: break-all; }
+.admin-user-actions { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.admin-user-actions .btn-sm { font-size: 0.72rem; padding: 0.3rem 0.55rem; }
+.admin-select {
+  padding: 0.5rem 0.6rem; font-family: 'Klee One', serif; font-size: 0.9rem;
+  border: 1px solid rgba(82,97,110,0.22); background: white; width: 100%;
+}
 .auth-tabs { display: flex; gap: 0.4rem; margin-bottom: 0.6rem; }
 .auth-tab {
   flex: 1; padding: 0.45rem 0.6rem; border-radius: 6px;

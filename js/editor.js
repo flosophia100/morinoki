@@ -1,6 +1,7 @@
 import { api } from './supabase.js';
 import { escapeHtml } from './utils.js';
-import { META as DESIGN_META, DEFAULTS as DESIGN_DEFAULTS } from './designconfig.js';
+import { META as DESIGN_META, DEFAULTS as DESIGN_DEFAULTS,
+         AMBIENCE_DEFAULTS, TIME_CURVE_OPTIONS, SEASON_OPTIONS } from './designconfig.js';
 
 // ===== CSVエクスポート(主催者向け) =====
 export function exportForestCsv(state) {
@@ -81,23 +82,7 @@ function idleHTML(state) {
       <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || 'morinokki')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
       <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
     </div>
-    ${isAdmin ? `
-      <div class="ip-block">
-        <label class="mini-label">管理者モード</label>
-        <p class="ip-desc" style="margin-bottom:0.4rem">全員の樹と枝を加筆修正できます。</p>
-        <a href="/admin5002" class="btn-secondary w-full" style="display:inline-block;text-align:center;text-decoration:none">ダッシュボードへ</a>
-        <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
-      </div>
-      <div class="ip-block">
-        <label class="mini-label">新しい幹を作る(管理者特権)</label>
-        <p class="ip-desc" style="font-size:0.76rem;margin-bottom:0.4rem">メール認証なしで幹を作成します。ユーザーログインはできません。</p>
-        <div class="ip-row">
-          <input id="admin-tree-name" type="text" maxlength="20" placeholder="幹の名前">
-          <button id="admin-tree-create-btn" class="btn-sm btn-ink">＋作成</button>
-        </div>
-        <p id="admin-tree-error" class="error hidden" style="font-size:0.78rem"></p>
-      </div>
-    ` : ''}
+    ${isAdmin ? adminPanelHTML(state) : ''}
     ${!isAdmin ? `
       <div class="ip-block ip-auth-form">
         <div class="auth-tabs">
@@ -108,8 +93,8 @@ function idleHTML(state) {
           <p class="ip-desc" style="margin-bottom:0.4rem">前に登録した名前と合言葉で入ります。</p>
           <label class="mini-label">名前</label>
           <input id="auth-name" type="text" maxlength="20" placeholder="登録した名前" autocomplete="off">
-          <label class="mini-label">合言葉 または 復元キー</label>
-          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉または復元キー">
+          <label class="mini-label">合言葉</label>
+          <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉">
           <button data-action="auth-login" class="btn-primary w-full" style="margin-top:0.6rem">ログイン</button>
           <p class="ip-hint" style="font-size:0.74rem;margin-top:0.5rem">
             合言葉を忘れた方は
@@ -131,34 +116,157 @@ function idleHTML(state) {
         `}
       </div>
     ` : ''}
-    ${isAdmin ? `
-      <div class="ip-block ip-design">
-        <label class="mini-label">樹のデザイン(管理者のみ)</label>
-        <p class="ip-desc" style="margin-bottom:0.4rem">スライダーを動かすと、すべての樹の見た目が変わります。</p>
-        ${DESIGN_META.map(m => {
-          const v = state.design?.[m.key] ?? DESIGN_DEFAULTS[m.key];
-          return `
-            <div class="design-row">
-              <label for="ds-${m.key}" class="design-label">${escapeHtml(m.label)}</label>
-              <input id="ds-${m.key}" data-design-key="${m.key}" type="range" min="0" max="1" step="0.01" value="${v}">
-            </div>
-          `;
-        }).join('')}
-        <button data-action="design-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
-      </div>
-    ` : ''}
-    ${(isAdmin && (state.trees || []).length > 0) ? `
-      <div class="ip-block">
-        <label class="mini-label">森の物語(管理者のみ)</label>
-        <button data-action="timelapse" class="btn-secondary w-full">タイムラプスで振り返る</button>
-      </div>
-      <div class="ip-block">
-        <label class="mini-label">主催者向け(管理者のみ)</label>
-        <button data-action="export-csv" class="btn-secondary w-full">森をCSVで書き出す</button>
-      </div>
-    ` : ''}
   `;
 }
+// ----- 管理者パネル(タブ式) -----
+function adminPanelHTML(state) {
+  const tab = state.adminTab || 'users';
+  const tabs = [
+    ['users',    'ユーザー'],
+    ['trunks',   '幹'],
+    ['design',   'デザイン'],
+    ['shimmer',  'ゆらぎ'],
+    ['ambience', '背景'],
+    ['tools',    'ツール'],
+  ];
+  return `
+    <div class="ip-block admin-block">
+      <label class="mini-label">管理者モード</label>
+      <div class="admin-tabs">
+        ${tabs.map(([k,l]) => `<button data-admin-tab="${k}" class="admin-tab ${tab===k?'on':''}">${l}</button>`).join('')}
+      </div>
+    </div>
+    ${tab === 'users'    ? adminUsersTab(state)    : ''}
+    ${tab === 'trunks'   ? adminTrunksTab(state)   : ''}
+    ${tab === 'design'   ? adminDesignTab(state)   : ''}
+    ${tab === 'shimmer'  ? adminShimmerTab(state)  : ''}
+    ${tab === 'ambience' ? adminAmbienceTab(state) : ''}
+    ${tab === 'tools'    ? adminToolsTab(state)    : ''}
+    <div class="ip-block">
+      <a href="/admin5002" class="btn-secondary w-full" style="display:inline-block;text-align:center;text-decoration:none">ダッシュボードへ</a>
+      <button data-action="admin-logout" class="btn-secondary w-full" style="margin-top:0.4rem">管理者ログアウト</button>
+    </div>
+  `;
+}
+
+function adminUsersTab(state) {
+  const users = state.adminUsers || [];
+  const loading = state.adminUsersLoading;
+  return `
+    <div class="ip-block">
+      <label class="mini-label">ユーザー管理</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">幹の削除・合言葉リセット・メール変更</p>
+      ${loading ? '<p class="ip-hint">読み込み中...</p>' : ''}
+      ${!loading && !users.length ? '<p class="ip-hint">ユーザーはまだいません</p>' : ''}
+      <ul class="admin-user-list">
+        ${users.map(u => `
+          <li class="admin-user-item" data-tree-id="${escapeHtml(u.tree_id)}">
+            <div class="admin-user-head">
+              <strong>${escapeHtml(u.name)}</strong>
+              <span class="admin-user-meta">${u.node_count}ノード${u.email ? '・メール登録済' : '・メール未登録'}</span>
+            </div>
+            <div class="admin-user-email">${escapeHtml(u.email || '(未登録)')}</div>
+            <div class="admin-user-actions">
+              <button data-action="admin-user-reset" data-tree-id="${escapeHtml(u.tree_id)}" class="btn-sm btn-secondary">合言葉リセット</button>
+              <button data-action="admin-user-email" data-tree-id="${escapeHtml(u.tree_id)}" class="btn-sm btn-secondary">メール変更</button>
+              <button data-action="admin-user-delete" data-tree-id="${escapeHtml(u.tree_id)}" data-name="${escapeHtml(u.name)}" class="btn-sm btn-danger">削除</button>
+            </div>
+          </li>
+        `).join('')}
+      </ul>
+      <button data-action="admin-users-refresh" class="btn-secondary w-full" style="margin-top:0.4rem">再読み込み</button>
+    </div>
+  `;
+}
+
+function adminTrunksTab(state) {
+  return `
+    <div class="ip-block">
+      <label class="mini-label">新しい幹を作る(管理者特権)</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">メール認証なしで幹を作成します。ユーザーログインはできません。</p>
+      <div class="ip-row">
+        <input id="admin-tree-name" type="text" maxlength="20" placeholder="幹の名前">
+        <button id="admin-tree-create-btn" class="btn-sm btn-ink">＋作成</button>
+      </div>
+      <p id="admin-tree-error" class="error hidden" style="font-size:0.78rem"></p>
+    </div>
+  `;
+}
+
+function adminDesignTab(state) {
+  const designKeys = ['trunkSize','nodeSize','density','lengthVar','bend','spikeChance','spikeLen','branchThickness','branchMeander'];
+  return `
+    <div class="ip-block">
+      <label class="mini-label">樹のデザイン</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">スライダーを動かすと、すべての樹の見た目が変わります。</p>
+      ${DESIGN_META.filter(m => designKeys.includes(m.key)).map(m => {
+        const v = state.design?.[m.key] ?? DESIGN_DEFAULTS[m.key];
+        return `<div class="design-row">
+          <label for="ds-${m.key}" class="design-label">${escapeHtml(m.label)}</label>
+          <input id="ds-${m.key}" data-design-key="${m.key}" type="range" min="0" max="1" step="0.01" value="${v}">
+        </div>`;
+      }).join('')}
+      <button data-action="design-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
+    </div>
+  `;
+}
+
+function adminShimmerTab(state) {
+  const keys = ['shimmerAmp','shimmerSpeed','nodeShimmer'];
+  return `
+    <div class="ip-block">
+      <label class="mini-label">ゆらぎ</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">幹やノードの動きの強さ・速さ。</p>
+      ${DESIGN_META.filter(m => keys.includes(m.key)).map(m => {
+        const v = state.design?.[m.key] ?? DESIGN_DEFAULTS[m.key];
+        return `<div class="design-row">
+          <label for="ds-${m.key}" class="design-label">${escapeHtml(m.label)}</label>
+          <input id="ds-${m.key}" data-design-key="${m.key}" type="range" min="0" max="1" step="0.01" value="${v}">
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function adminAmbienceTab(state) {
+  const amb = state.ambience || AMBIENCE_DEFAULTS;
+  return `
+    <div class="ip-block">
+      <label class="mini-label">背景・ギミック</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">時間帯・季節・鳥の頻度・背景森影の密度を調整。</p>
+      <label class="design-label">時間帯</label>
+      <select data-ambience-key="timeCurve" class="admin-select">
+        ${TIME_CURVE_OPTIONS.map(o => `<option value="${o.value}" ${amb.timeCurve===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
+      </select>
+      <label class="design-label" style="margin-top:0.5rem">季節</label>
+      <select data-ambience-key="season" class="admin-select">
+        ${SEASON_OPTIONS.map(o => `<option value="${o.value}" ${amb.season===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
+      </select>
+      <div class="design-row" style="margin-top:0.5rem">
+        <label class="design-label">鳥の出現頻度</label>
+        <input data-ambience-key="birdFreq" type="range" min="0" max="1" step="0.01" value="${amb.birdFreq ?? 0.5}">
+      </div>
+      <div class="design-row">
+        <label class="design-label">背景森影の密度</label>
+        <input data-ambience-key="canopyDensity" type="range" min="0" max="1" step="0.01" value="${amb.canopyDensity ?? 0.5}">
+      </div>
+      <button data-action="ambience-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
+    </div>
+  `;
+}
+
+function adminToolsTab(state) {
+  return `
+    <div class="ip-block">
+      <label class="mini-label">ツール</label>
+      ${(state.trees || []).length > 0 ? `
+        <button data-action="timelapse" class="btn-secondary w-full">タイムラプスで振り返る</button>
+        <button data-action="export-csv" class="btn-secondary w-full" style="margin-top:0.4rem">森をCSVで書き出す</button>
+      ` : '<p class="ip-hint">まだ幹がありません</p>'}
+    </div>
+  `;
+}
+
 function wireIdle(el, state, cb) {
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
   el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
@@ -173,6 +281,91 @@ function wireIdle(el, state, cb) {
 
   // 管理者ログアウト(ログインは /admin5002 でのみ行う)
   el.querySelector('[data-action="admin-logout"]')?.addEventListener('click', () => cb.onAdminLogout && cb.onAdminLogout());
+
+  // 管理者タブ切替
+  el.querySelectorAll('[data-admin-tab]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      state.adminTab = btn.dataset.adminTab;
+      // ユーザータブを開いたときだけ一覧をフェッチ
+      if (state.adminTab === 'users' && cb.onAdminListUsers) {
+        state.adminUsersLoading = true;
+        cb.onRerender && cb.onRerender();
+        try { state.adminUsers = await cb.onAdminListUsers(); }
+        catch { state.adminUsers = []; }
+        state.adminUsersLoading = false;
+      }
+      cb.onRerender && cb.onRerender();
+    });
+  });
+
+  // ユーザー管理: 再読み込み
+  el.querySelector('[data-action="admin-users-refresh"]')?.addEventListener('click', async () => {
+    if (!cb.onAdminListUsers) return;
+    state.adminUsersLoading = true;
+    cb.onRerender && cb.onRerender();
+    state.adminUsers = await cb.onAdminListUsers();
+    state.adminUsersLoading = false;
+    cb.onRerender && cb.onRerender();
+  });
+  // 削除
+  el.querySelectorAll('[data-action="admin-user-delete"]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.treeId; const name = b.dataset.name;
+      if (!confirm(`「${name}」を削除します。幹と枝が全て消えます。よろしいですか?`)) return;
+      await cb.onAdminDeleteUser(id);
+      if (cb.onAdminListUsers) state.adminUsers = await cb.onAdminListUsers();
+      cb.onRerender && cb.onRerender();
+    });
+  });
+  // 合言葉リセット
+  el.querySelectorAll('[data-action="admin-user-reset"]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.treeId;
+      if (!confirm('このユーザーの合言葉をリセットします。新合言葉がメールに送信されます(メール未登録なら画面表示)。よろしいですか?')) return;
+      await cb.onAdminResetUserPasscode(id);
+    });
+  });
+  // メール変更(管理者)
+  el.querySelectorAll('[data-action="admin-user-email"]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const id = b.dataset.treeId;
+      const newEmail = prompt('新しいメールアドレス(空でメール解除)');
+      if (newEmail == null) return;
+      await cb.onAdminSetUserEmail(id, newEmail);
+      if (cb.onAdminListUsers) state.adminUsers = await cb.onAdminListUsers();
+      cb.onRerender && cb.onRerender();
+    });
+  });
+
+  // 背景・ギミック(ambience)
+  let ambTimer = null;
+  function saveAmbienceSoon() {
+    clearTimeout(ambTimer);
+    ambTimer = setTimeout(() => cb.onAmbienceChange && cb.onAmbienceChange({ ...state.ambience }), 350);
+  }
+  el.querySelectorAll('[data-ambience-key]').forEach(input => {
+    input.addEventListener('input', () => {
+      const k = input.dataset.ambienceKey;
+      const raw = input.value;
+      const val = (input.type === 'range') ? Number(raw) : raw;
+      state.ambience = { ...(state.ambience || {}), [k]: val };
+      cb.onAmbiencePreview && cb.onAmbiencePreview(state.ambience);
+      saveAmbienceSoon();
+    });
+    input.addEventListener('change', () => {
+      const k = input.dataset.ambienceKey;
+      const val = (input.type === 'range') ? Number(input.value) : input.value;
+      state.ambience = { ...(state.ambience || {}), [k]: val };
+      cb.onAmbiencePreview && cb.onAmbiencePreview(state.ambience);
+      saveAmbienceSoon();
+    });
+  });
+  el.querySelector('[data-action="ambience-reset"]')?.addEventListener('click', () => {
+    state.ambience = { ...AMBIENCE_DEFAULTS };
+    cb.onAmbiencePreview && cb.onAmbiencePreview(state.ambience);
+    cb.onAmbienceChange && cb.onAmbienceChange({ ...state.ambience });
+    cb.onRerender && cb.onRerender();
+  });
 
   // 管理者による幹の作成
   const admTreeBtn = el.querySelector('#admin-tree-create-btn');
@@ -300,13 +493,20 @@ function ownTreeHTML(tree) {
     </div>
     <details class="ip-block">
       <summary class="mini-label" style="cursor:pointer">合言葉・メールを変える</summary>
-      <div style="margin-top:0.5rem">
-        <label class="mini-label">新しい合言葉(4桁以上・変えない場合は空欄)</label>
-        <input id="cr-pass" type="password" minlength="4" maxlength="40" autocomplete="new-password" placeholder="空欄なら変更しません">
-        <label class="mini-label">メール(空欄でメール解除)</label>
-        <input id="cr-email" type="email" autocomplete="off" value="${escapeHtml(email)}" placeholder="you@example.com">
-        <button id="cr-save" class="btn-primary w-full" style="margin-top:0.5rem">保存</button>
-        <p id="cr-msg" class="ip-hint" style="font-size:0.74rem;margin-top:0.3rem"></p>
+      <div style="margin-top:0.6rem">
+        <p class="ip-hint" style="font-size:0.74rem;margin-bottom:0.4rem">どちらの変更も、登録メール宛に届く確認リンクをクリックするまで反映されません。</p>
+
+        <label class="mini-label">新しい合言葉(4桁以上)</label>
+        <input id="cr-pass" type="password" minlength="4" maxlength="40" autocomplete="new-password" placeholder="新しい合言葉">
+        <button id="cr-pass-save" class="btn-secondary w-full" style="margin-top:0.4rem">合言葉の変更を申請</button>
+
+        <label class="mini-label" style="margin-top:0.6rem">現在のメール</label>
+        <input id="cr-email-current" type="email" value="${escapeHtml(email)}" readonly style="background:rgba(82,97,110,0.06)">
+        <label class="mini-label">新しいメール</label>
+        <input id="cr-email-new" type="email" autocomplete="off" placeholder="new@example.com">
+        <button id="cr-email-save" class="btn-secondary w-full" style="margin-top:0.4rem">メールの変更を申請</button>
+
+        <p id="cr-msg" class="ip-hint" style="font-size:0.74rem;margin-top:0.4rem"></p>
       </div>
     </details>
     <div class="ip-block">
@@ -330,24 +530,32 @@ function kwItemHTML(tree, node) {
 function wireOwnTree(el, state, tree, cb) {
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
 
-  // 合言葉・メール変更
-  const crBtn = el.querySelector('#cr-save');
-  crBtn?.addEventListener('click', async () => {
+  // 合言葉変更(メール認証経由)
+  const crPassBtn = el.querySelector('#cr-pass-save');
+  crPassBtn?.addEventListener('click', async () => {
     const msg = el.querySelector('#cr-msg');
     const pw = el.querySelector('#cr-pass').value;
-    const emailRaw = el.querySelector('#cr-email').value.trim();
-    if (pw && pw.length < 4) { if (msg) msg.textContent = '合言葉は4桁以上にしてください'; return; }
-    if (!cb.onUpdateCredentials) return;
+    if (!pw || pw.length < 4) { if (msg) msg.textContent = '合言葉は4桁以上にしてください'; return; }
+    if (!cb.onRequestPasscodeChange) return;
     try {
-      await cb.onUpdateCredentials({
-        newPasscode: pw || null,
-        newEmail: emailRaw === '' ? '' : emailRaw, // 空=解除、nullの時は無変更
-      });
-      if (msg) msg.textContent = '保存しました';
+      await cb.onRequestPasscodeChange(pw);
+      if (msg) msg.textContent = '確認メールを送りました。届いたリンクをクリックして完了してください。';
       el.querySelector('#cr-pass').value = '';
-    } catch (e) {
-      if (msg) msg.textContent = '保存失敗: ' + (e.message || '');
-    }
+    } catch (e) { if (msg) msg.textContent = '送信失敗: ' + (e.message || ''); }
+  });
+
+  // メール変更(新メール宛に認証リンク、旧メール宛に通知)
+  const crEmailBtn = el.querySelector('#cr-email-save');
+  crEmailBtn?.addEventListener('click', async () => {
+    const msg = el.querySelector('#cr-msg');
+    const newEmail = el.querySelector('#cr-email-new').value.trim();
+    if (!newEmail || !newEmail.includes('@')) { if (msg) msg.textContent = '新しいメールアドレスを正しく入力してください'; return; }
+    if (!cb.onRequestEmailChange) return;
+    try {
+      await cb.onRequestEmailChange(newEmail);
+      if (msg) msg.textContent = `「${newEmail}」に確認メールを送りました。`;
+      el.querySelector('#cr-email-new').value = '';
+    } catch (e) { if (msg) msg.textContent = '送信失敗: ' + (e.message || ''); }
   });
 
   const input = el.querySelector('#ip-add-input');

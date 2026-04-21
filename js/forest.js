@@ -19,7 +19,7 @@ export function layoutRandom(trees) {
 export function createForest(canvas, state) {
   const ctx = canvas.getContext('2d');
   let dpr = 1, W = 0, H = 0;
-  const critters = new Critters();
+  const critters = new Critters(() => state.ambience);
   let lastTickAt = performance.now();
 
   function resize() {
@@ -247,7 +247,7 @@ export function createForest(canvas, state) {
     critters.tick(dt, W, H);
 
     ctx.clearRect(0, 0, W, H);
-    const atmo = state.atmo || atmosphereAt();
+    const atmo = state.atmo || atmosphereAt(new Date(), state.ambience);
     const bg = ctx.createLinearGradient(0, 0, 0, H);
     bg.addColorStop(0, atmo.top); bg.addColorStop(1, atmo.bot);
     ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
@@ -261,7 +261,7 @@ export function createForest(canvas, state) {
     // 背景の小さな canopy 群(ノード総数で密度が増える)
     const totalNodes = (state.trees || []).reduce((s, t) => s + (t.nodes?.length || 0), 0);
     const roomSeed = (state.room?.slug || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) || 42;
-    drawBackgroundCanopies(ctx, W, H, totalNodes, roomSeed);
+    drawBackgroundCanopies(ctx, W, H, totalNodes, roomSeed, state.ambience?.canopyDensity ?? 0.5);
 
     // 樹(world coords)
     ctx.save();

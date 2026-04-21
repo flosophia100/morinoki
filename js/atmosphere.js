@@ -47,19 +47,35 @@ const SEASON_ACCENT = {
   winter:  { leaf: '#8ea0a8', bloom: '#eaf0f4', mist: 'rgba(220,230,240,0.16)', name: '冬' },
 };
 
-export function atmosphereAt(date = new Date()) {
-  const h = date.getHours() + date.getMinutes() / 60;
-  let prev = KEYFRAMES[0], next = KEYFRAMES[0];
-  for (let i = 0; i < KEYFRAMES.length - 1; i++) {
-    if (h >= KEYFRAMES[i].h && h < KEYFRAMES[i+1].h) {
-      prev = KEYFRAMES[i]; next = KEYFRAMES[i+1];
-      break;
+// tone固定(管理者指定)用: 一致する最初のフレームを返す
+function frameByTone(tone) {
+  return KEYFRAMES.find(k => k.tone === tone) || KEYFRAMES[4]; // noon fallback
+}
+
+export function atmosphereAt(date = new Date(), ambience = null) {
+  const timeCurve = ambience?.timeCurve || 'auto';
+  let prev, next, t;
+  if (timeCurve && timeCurve !== 'auto') {
+    prev = frameByTone(timeCurve);
+    next = prev;
+    t = 0;
+  } else {
+    const h = date.getHours() + date.getMinutes() / 60;
+    prev = KEYFRAMES[0]; next = KEYFRAMES[0];
+    for (let i = 0; i < KEYFRAMES.length - 1; i++) {
+      if (h >= KEYFRAMES[i].h && h < KEYFRAMES[i+1].h) {
+        prev = KEYFRAMES[i]; next = KEYFRAMES[i+1];
+        break;
+      }
     }
+    const span = next.h - prev.h;
+    t = span > 0 ? (h - prev.h) / span : 0;
   }
-  const span = next.h - prev.h;
-  const t = span > 0 ? (h - prev.h) / span : 0;
-  const season = seasonOf(date);
-  const accent = SEASON_ACCENT[season];
+
+  const seasonFix = ambience?.season || 'auto';
+  const season = (seasonFix && seasonFix !== 'auto') ? seasonFix : seasonOf(date);
+  const accent = SEASON_ACCENT[season] || SEASON_ACCENT.spring;
+  const h = date.getHours() + date.getMinutes() / 60;
   return {
     top: lerpHex(prev.top, next.top, t),
     bot: lerpHex(prev.bot, next.bot, t),

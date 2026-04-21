@@ -3,16 +3,23 @@
 // 画面の view(pan/zoom)に関係なく、screen (CSS pixel) 座標で描画する
 
 export class Critters {
-  constructor() {
+  constructor(getAmbience = null) {
     this.birds = [];
     this.lastSpawnBird = 0;
     this.t = 0;
+    this.getAmbience = getAmbience || (() => null);
   }
 
   tick(dt, W, H) {
     this.t += dt;
-    // 12〜25秒ごとに1羽(鳥のみ、小動物は出さない)
-    if (this.t - this.lastSpawnBird > 12 + Math.random() * 13) {
+    const amb = this.getAmbience() || {};
+    // birdFreq 0..1 → 0.0で止まる、0.5で既定、1.0で2倍頻度
+    const freq = typeof amb.birdFreq === 'number' ? amb.birdFreq : 0.5;
+    if (freq <= 0.01) return; // 鳥を出さない設定
+    // 既定の間隔 12〜25秒 を freq の逆比で伸縮
+    const scale = 1 / (0.2 + freq * 1.8); // 0.5→1.0倍、0→非常に長い(上のearly-returnで止まるが)、1→0.5倍
+    const interval = (12 + Math.random() * 13) * scale;
+    if (this.t - this.lastSpawnBird > interval) {
       this.lastSpawnBird = this.t;
       this.spawnBird(W, H);
     }
@@ -77,9 +84,11 @@ function drawBird(ctx, b) {
 
 // 背景の小さな canopy を描く(森全体の雰囲気づくり)
 // seedと木の数から乱数を決める → 再現性ある位置
-export function drawBackgroundCanopies(ctx, W, H, nodeCount, seed = 42) {
-  // ノード数に応じて数を増やす(最低 14、最大 90)
-  const count = Math.min(90, 14 + Math.floor(nodeCount * 1.8));
+export function drawBackgroundCanopies(ctx, W, H, nodeCount, seed = 42, canopyDensity = 0.5) {
+  // canopyDensity 0..1 → 倍率 0..2(0.5が中立)
+  const mul = Math.max(0, Math.min(2, canopyDensity * 2));
+  const count = Math.min(90, Math.floor((14 + Math.floor(nodeCount * 1.8)) * mul));
+  if (count <= 0) { return; }
   const rng = mulberry32(seed);
   ctx.save();
   for (let i = 0; i < count; i++) {

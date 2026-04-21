@@ -1,5 +1,5 @@
 import { api } from './supabase.js';
-import { mergeDesign } from './designconfig.js';
+import { mergeDesign, mergeAmbience } from './designconfig.js';
 
 const isAdmin = document.body.classList.contains('page-admin');
 const isRoom = document.body.classList.contains('page-room');
@@ -56,6 +56,7 @@ async function initRoom() {
     selection: null,
     atmo: atmosphereAt(),
     design: mergeDesign(null),
+    ambience: mergeAmbience(null),
   };
   // グローバル管理者トークンを復元(/admin5002 でログインしてれば有効)
   const ADMIN_KEY = 'mori.admin.global.token';
@@ -69,9 +70,55 @@ async function initRoom() {
     return;
   }
   state.design = mergeDesign(state.room?.design);
+  state.ambience = mergeAmbience(state.room?.ambience);
+  state.atmo = atmosphereAt(new Date(), state.ambience);
 
-  // メール認証リンクから来た場合: ?verify=<token> を処理
-  const verifyToken = new URLSearchParams(location.search).get('verify');
+  // URLパラメタからトークン処理
+  const params = new URLSearchParams(location.search);
+  // 合言葉/メール変更の承認リンク
+  const credChangeToken = params.get('credchange');
+  if (credChangeToken) {
+    try {
+      const res = await api.verifyCredentialChange(credChangeToken);
+      const row = Array.isArray(res) ? res[0] : res;
+      const { showToast } = await import('./toast.js');
+      if (row.kind === 'passcode_change') showToast('合言葉を変更しました', 'success');
+      else if (row.kind === 'email_change') showToast('メールアドレスを変更しました', 'success');
+    } catch (e) {
+      const { showError } = await import('./toast.js');
+      showError(e, 'リンクの検証に失敗しました');
+    }
+    const u = new URL(location.href);
+    u.searchParams.delete('credchange');
+    history.replaceState(null, '', u.toString());
+  }
+  // 合言葉リセットリンク
+  const resetToken = params.get('reset');
+  if (resetToken) {
+    // 新合言葉をpromptで受け取る(最小UI)
+    const newPw = prompt('新しい合言葉を入力してください(4桁以上)');
+    if (newPw && newPw.length >= 4) {
+      try {
+        const res = await api.verifyPasscodeReset(resetToken, newPw);
+        const row = Array.isArray(res) ? res[0] : res;
+        const { saveSession } = await import('./auth.js');
+        state.session = { treeId: row.tree_id, editToken: row.edit_token, treeName: row.name };
+        saveSession(slug, state.session);
+        state.selfTreeId = row.tree_id;
+        const { showToast } = await import('./toast.js');
+        showToast('合言葉を変更しました。ログイン済みです。', 'success');
+      } catch (e) {
+        const { showError } = await import('./toast.js');
+        showError(e, 'リンクの検証に失敗しました');
+      }
+    }
+    const u = new URL(location.href);
+    u.searchParams.delete('reset');
+    history.replaceState(null, '', u.toString());
+  }
+
+  // 新規登録の本登録リンク: ?verify=<token>
+  const verifyToken = params.get('verify');
   if (verifyToken) {
     try {
       const res = await api.verifyRegistration(verifyToken);
@@ -195,22 +242,63 @@ async function initRoom() {
       return { pending: true };
     },
     onForgotPass: async ({ name }) => {
-      const res = await api.requestPasscodeReset(state.room.slug, name);
-      if (res?.sent) {
-        showToast('登録メールに再設定リンクを送りました', 'success');
-      } else {
-        showToast('この名前にはメールが登録されていません', 'error');
-      }
+      const res = await api.requestPasscodeReset(state.room.slug, name, location.origin);
+      if (res?.sent) showToast('登録メールに再設定リンクを送りました', 'success');
+      else showToast('この名前にはメールが登録されていません', 'error');
     },
-    onUpdateCredentials: async ({ newPasscode, newEmail }) => {
+    onRequestPasscodeChange: async (newPasscode) => {
       if (!state.session?.editToken) throw new Error('ログインが必要です');
-      await api.updateTreeCredentials(state.session.editToken, newPasscode, newEmail);
-      // 反映(reloadで最新rowを取得)
+      await api.requestPasscodeChange(state.session.editToken, newPasscode, location.origin);
+      showToast('確認メールを送りました。現在のメール宛のリンクをクリックして完了してください。', 'success');
+    },
+    onRequestEmailChange: async (newEmail) => {
+      if (!state.session?.editToken) throw new Error('ログインが必要です');
+      await api.requestEmailChange(state.session.editToken, newEmail, location.origin);
+      showToast(`確認メールを ${newEmail} に送りました。リンクをクリックして完了してください。`, 'success');
+    },
+    onRequestPasscodeReset: async (name) => {
+      const res = await api.requestPasscodeReset(state.room.slug, name, location.origin);
+      if (res?.sent) showToast('登録メールに再設定リンクを送りました', 'success');
+      else showToast('この名前にはメールが登録されていません', 'error');
+    },
+    // 管理者: ユーザー管理
+    onAdminListUsers: async () => {
+      if (!state.adminToken) return [];
+      return await api.adminListUsers(state.adminToken, state.room.slug);
+    },
+    onAdminDeleteUser: async (treeId) => {
+      await api.adminDeleteUser(state.adminToken, treeId);
       await reload();
-      const mine = state.trees.find(t => t.id === state.selfTreeId);
-      if (mine) state.selection = { kind: 'tree', tree: mine };
+      state.selection = null;
+      live.notifyDataChanged();
       updatePanel(); forest.render();
-      showToast('保存しました', 'success');
+      showToast('削除しました', 'success');
+    },
+    onAdminResetUserPasscode: async (treeId) => {
+      const res = await api.adminResetUserPasscode(state.adminToken, treeId);
+      const row = Array.isArray(res) ? res[0] : res;
+      if (row?.sent) showToast('新しい合言葉を本人のメールに送りました', 'success');
+      else alert('メール未登録のユーザーです。新しい合言葉:\n\n' + (row?.new_passcode || ''));
+    },
+    onAdminSetUserEmail: async (treeId, newEmail) => {
+      await api.adminSetUserEmail(state.adminToken, treeId, newEmail || '');
+      await reload();
+      updatePanel();
+      showToast('メールを更新しました', 'success');
+    },
+    // 管理者: 背景・ギミック
+    onAmbiencePreview: (nextAmbience) => {
+      state.ambience = mergeAmbience(nextAmbience);
+      state.atmo = atmosphereAt(new Date(), state.ambience);
+      forest.render();
+    },
+    onAmbienceChange: async (nextAmbience) => {
+      state.ambience = mergeAmbience(nextAmbience);
+      state.atmo = atmosphereAt(new Date(), state.ambience);
+      forest.render();
+      if (!state.adminToken) return;
+      try { await api.setRoomAmbience(state.adminToken, state.room.slug, state.ambience); }
+      catch (e) { showError(e, '背景設定の保存に失敗しました'); }
     },
     onSelectNode: (tree, node) => {
       state.selection = { kind: 'node', tree, node };

@@ -29,6 +29,43 @@ export function mergeDesign(raw) {
   return out;
 }
 
+// ---- ambience(背景・ギミック) ----
+export const AMBIENCE_DEFAULTS = {
+  timeCurve: 'auto',         // 'auto' | 'dawn' | 'morning' | 'noon' | 'afternoon' | 'sunset' | 'dusk' | 'night'
+  season: 'auto',            // 'auto' | 'spring' | 'summer' | 'autumn' | 'winter'
+  birdFreq: 0.5,             // 0..1 (出現頻度倍率)
+  canopyDensity: 0.5,        // 0..1 (背景森影の密度)
+};
+
+export function mergeAmbience(raw) {
+  const out = { ...AMBIENCE_DEFAULTS };
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.timeCurve === 'string') out.timeCurve = raw.timeCurve;
+    if (typeof raw.season === 'string') out.season = raw.season;
+    const bf = Number(raw.birdFreq); if (Number.isFinite(bf) && bf >= 0 && bf <= 1) out.birdFreq = bf;
+    const cd = Number(raw.canopyDensity); if (Number.isFinite(cd) && cd >= 0 && cd <= 1) out.canopyDensity = cd;
+  }
+  return out;
+}
+
+export const TIME_CURVE_OPTIONS = [
+  { value: 'auto',      label: '自動(現在時刻)' },
+  { value: 'dawn',      label: '夜明け固定' },
+  { value: 'morning',   label: '朝固定' },
+  { value: 'noon',      label: '昼固定' },
+  { value: 'afternoon', label: '夕方固定' },
+  { value: 'sunset',    label: '夕焼け固定' },
+  { value: 'dusk',      label: '薄暮固定' },
+  { value: 'night',     label: '夜固定' },
+];
+export const SEASON_OPTIONS = [
+  { value: 'auto',   label: '自動(現在の月)' },
+  { value: 'spring', label: '春固定' },
+  { value: 'summer', label: '夏固定' },
+  { value: 'autumn', label: '秋固定' },
+  { value: 'winter', label: '冬固定' },
+];
+
 // スライダー用のメタ情報(ラベル・範囲)
 export const META = [
   { key: 'trunkSize',       label: '幹の大きさ' },
