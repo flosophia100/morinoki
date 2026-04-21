@@ -343,17 +343,18 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.restore();
     }
 
+    // 枝ノードのラベル色は幹と揃える(自分=明るい背景+濃い文字、他人=暗い背景+淡い文字)
+    const labelBg = isSelf ? 'rgba(255, 248, 220, 0.82)' : 'rgba(31, 26, 21, 0.6)';
+    const labelFg = isSelf ? '#3a2d0a' : '#f4ede0';
     if (p.nr >= 20 * scale) {
       ctx.save();
-      ctx.fillStyle = 'rgba(255, 252, 244, 0.92)';
       ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      // 中央に少し背景つける(可読性のため)
       const tw = ctx.measureText(n.text).width;
-      ctx.fillStyle = 'rgba(244, 237, 224, 0.55)';
-      ctx.fillRect(p.x - tw/2 - 2, p.y - 7, tw + 4, 14);
-      ctx.fillStyle = 'rgba(30, 42, 51, 0.92)';
+      ctx.fillStyle = labelBg;
+      ctx.fillRect(p.x - tw/2 - 4, p.y - 9, tw + 8, 18);
+      ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x, p.y);
       ctx.restore();
     } else {
@@ -364,10 +365,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.textBaseline = 'middle';
       const pad = (p.nr + 6) * (isRight ? 1 : -1);
       const tw = ctx.measureText(n.text).width;
-      const bgX = isRight ? p.x + pad - 1 : p.x + pad - tw - 3;
-      ctx.fillStyle = 'rgba(244, 237, 224, 0.72)';
-      ctx.fillRect(bgX, p.y - 7, tw + 4, 14);
-      ctx.fillStyle = 'rgba(30, 42, 51, 0.92)';
+      const bgX = isRight ? p.x + pad - 2 : p.x + pad - tw - 4;
+      ctx.fillStyle = labelBg;
+      ctx.fillRect(bgX, p.y - 8, tw + 6, 16);
+      ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x + pad, p.y);
       ctx.restore();
     }
