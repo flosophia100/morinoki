@@ -4,29 +4,60 @@ import { atmosphereAt } from './atmosphere.js';
 import { Critters, drawBackgroundCanopies } from './critters.js';
 
 // 樹数に応じたフィールド半径(中心から)
-// 1本 → 820px、10本 → 1296px、30本 → 1804px
+//   1本 → 600px、10本 → ~830px、30本 → ~1350px
 export function fieldRadiusFor(treeCount) {
-  return Math.max(600, Math.sqrt(Math.max(1, treeCount)) * 220);
+  return Math.max(500, Math.sqrt(Math.max(1, treeCount)) * 180 + 200);
 }
 
-export function layoutRandom(trees) {
+// x=y=0 の樹を、セッションごとに異なる乱数でフィールド内にばらまく。
+// 既に DB 上で x/y を持つ樹(= 一度でもドラッグされた)は尊重して動かさない。
+// 兄弟との最低距離を保つ(リトライ 40 回)。
+export function layoutRandom(trees, sessionSeed = 1) {
   const R = fieldRadiusFor(trees.length);
-  trees.forEach((t) => {
+  const placed = [];
+  // 既存の placed 済みを先に入れる
+  trees.forEach(t => {
     const x = Number(t.x), y = Number(t.y);
-    if (!isFinite(x) || !isFinite(y) || (x === 0 && y === 0)) {
-      // 名前は使わず、tree.id(UUID) ハッシュから決定論的にランダム配置
-      const basis = typeof t.id === 'string' && t.id.length
-        ? stringHash(t.id)
-        : (Number(t.seed) || 1);
-      const rng = seededRandom(Math.max(1, basis));
-      // 円内一様分布(sqrt で境界に寄らないように)
+    if (isFinite(x) && isFinite(y) && (x !== 0 || y !== 0)) {
+      t.x = x; t.y = y;
+      placed.push(t);
+    }
+  });
+  // rng はセッションシード + tree.id から。同じセッションで reload しても
+  // 既に配置した樹は動かないよう per-tree に派生させる
+  const baseRng = seededRandom(sessionSeed);
+  trees.forEach(t => {
+    const existing = Number(t.x);
+    if (isFinite(existing) && (existing !== 0 || Number(t.y) !== 0)) return;
+    const idHash = typeof t.id === 'string' && t.id.length
+      ? stringHash(t.id)
+      : (Number(t.seed) || 1);
+    // セッション毎に異なるよう sessionSeed と混ぜる
+    const mix = Math.max(1, Math.floor((baseRng() * 1e9) ^ idHash));
+    const rng = seededRandom(mix);
+    const trunkR = trunkRadiusFor(t);
+    const minDist = trunkR * 2.4 + 40; // 最低離間
+
+    let best = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
       const theta = rng() * Math.PI * 2;
       const r = R * Math.sqrt(rng());
-      t.x = Math.cos(theta) * r;
-      t.y = Math.sin(theta) * r;
-    } else {
-      t.x = x; t.y = y;
+      const x = Math.cos(theta) * r;
+      const y = Math.sin(theta) * r;
+      let ok = true;
+      for (const p of placed) {
+        const pr = trunkRadiusFor(p);
+        const need = (trunkR + pr) * 1.2 + 20;
+        const dx = x - p.x, dy = y - p.y;
+        if (dx*dx + dy*dy < need * need) { ok = false; break; }
+      }
+      if (ok) { best = { x, y }; break; }
+      // 途中、最遠候補を best に残しておく(全滅時のフォールバック)
+      if (!best) best = { x, y };
     }
+    t.x = best.x;
+    t.y = best.y;
+    placed.push(t);
   });
 }
 
@@ -49,7 +80,7 @@ export function createForest(canvas, state) {
   window.addEventListener('resize', () => { resize(); render(); });
 
   let drag = null;
-  let pinch = null; // { d0, scale0, ox0, oy0, cx, cy }
+  let pinch = null;
 
   function pt(e) {
     const r = canvas.getBoundingClientRect();
@@ -69,9 +100,7 @@ export function createForest(canvas, state) {
     return { x: (x - state.view.ox) / state.view.scale, y: (y - state.view.oy) / state.view.scale };
   }
 
-  // ヒットテスト: ノード(最前面・深さ優先) > 幹
-  // 位置は描画位置(display)で判定 — ゆらぎ/drift中でもタップが合う
-  // excludeNodeId を指定すると、その自ノードは対象外(D&Dで自分自身に重ねる防止)
+  // ヒットテスト: display 位置で判定
   function hitTest(sx, sy, excludeNodeId) {
     const w = screenToWorld(sx, sy);
     const trees = state.trees || [];
@@ -89,7 +118,6 @@ export function createForest(canvas, state) {
         }
       }
     }
-    // 幹 — display位置で判定
     for (let i = trees.length - 1; i >= 0; i--) {
       const t = trees[i];
       const tx = t._displayX ?? t.x;
@@ -109,40 +137,23 @@ export function createForest(canvas, state) {
     const world = screenToWorld(p.x, p.y);
     drag = { start: p, last: p, moved: 0, startWorld: world, mode: 'pan', hit };
 
-    // admin モードなら 全樹・全ノード編集許可、通常は自分の樹のみ
     const canEdit = hit && (state.adminToken || (state.session && hit.tree.id === state.selfTreeId));
     if (canEdit) {
       if (hit.type === 'trunk') {
         drag.mode = 'drag-tree';
-        // 表示位置(drift+wind 込み)を base にそのまま吸収し、drift/wind を 0 に
-        // これで mousedown 時の「ベース位置へのスナップ」を防ぐ
-        const dispX = hit.tree._displayX ?? hit.tree.x;
-        const dispY = hit.tree._displayY ?? hit.tree.y;
-        hit.tree.x = dispX;
-        hit.tree.y = dispY;
-        hit.tree._driftX = 0;
-        hit.tree._driftY = 0;
-        hit.tree._windX = 0;
-        hit.tree._windY = 0;
-        drag.origX = dispX;
-        drag.origY = dispY;
+        // _dragging=true で tick の sway 更新がスキップされ、_swayX/Y が
+        // 凍結される。tree.x を直接動かせば display はマウスに完全追従する。
         hit.tree._dragging = true;
+        drag.origX = hit.tree.x;
+        drag.origY = hit.tree.y;
       } else if (hit.type === 'node') {
         drag.mode = 'drag-node';
         const n = hit.node;
-        // 現在の offset(未設定なら _x/_y から逆算)に simDX/Y を畳み込んで、
-        // sim をゼロに戻す。_dragging=true で nodesim はこのノードをスキップする
-        const curOffX = n.offset_x != null ? Number(n.offset_x)
-          : (n._x - (n._parentX || hit.tree.x));
-        const curOffY = n.offset_y != null ? Number(n.offset_y)
-          : (n._y - (n._parentY || hit.tree.y));
-        n.offset_x = curOffX + (n.simDX || 0);
-        n.offset_y = curOffY + (n.simDY || 0);
-        n.simDX = 0; n.simDY = 0;
-        n.vx = 0;    n.vy = 0;
-        n._dragging = true;
-        drag.origOffX = n.offset_x;
-        drag.origOffY = n.offset_y;
+        n._dragging = true; // nodesim が simDX/Y を凍結
+        drag.origOffX = n.offset_x != null ? Number(n.offset_x)
+          : (n._x - (n._parentX || hit.tree.x) - (n.simDX || 0));
+        drag.origOffY = n.offset_y != null ? Number(n.offset_y)
+          : (n._y - (n._parentY || hit.tree.y) - (n.simDY || 0));
       }
     }
   }
@@ -186,11 +197,9 @@ export function createForest(canvas, state) {
     if (d.moved > 6) {
       if (d.mode === 'drag-tree' && state.onTreeMoved) state.onTreeMoved(d.hit.tree);
       else if (d.mode === 'drag-node') {
-        // ドロップ位置が他の「自ノード」上なら reparent、そうでなければ位置移動
         let dropped = null;
         try { dropped = d.last ? hitTest(d.last.x, d.last.y, d.hit.node.id) : null; } catch {}
         const sameTree = dropped && dropped.type === 'node' && dropped.tree.id === d.hit.tree.id;
-        // 自分自身の子孫にはつけられない(循環防止)
         const forbidden = sameTree && isDescendant(d.hit.tree, d.hit.node.id, dropped.node.id);
         if (sameTree && !forbidden && state.onNodeReparented) {
           state.onNodeReparented(d.hit.tree, d.hit.node, dropped.node);
@@ -208,7 +217,6 @@ export function createForest(canvas, state) {
     }
   }
 
-  // node が ancestor の子孫か(循環防止用)
   function isDescendant(tree, ancestorId, nodeId) {
     const nodes = tree.nodes || [];
     let cur = nodes.find(n => n.id === nodeId);
@@ -253,7 +261,6 @@ export function createForest(canvas, state) {
       const { cx, cy, d } = twoTouchCenter(e);
       const factor = d / pinch.d0;
       const s = Math.max(0.25, Math.min(3.5, pinch.scale0 * factor));
-      // pinch center を中心にズーム
       const ratio = s / pinch.scale0;
       state.view.ox = cx - (cx - pinch.ox0) * ratio;
       state.view.oy = cy - (cy - pinch.oy0) * ratio;
@@ -270,7 +277,6 @@ export function createForest(canvas, state) {
   canvas.addEventListener('wheel', onWheel, { passive: false });
 
   function render() {
-    // critters tick(前回のrenderからの経過時間で)
     const now = performance.now();
     const dt = Math.min(0.1, (now - lastTickAt) / 1000);
     lastTickAt = now;
@@ -288,26 +294,20 @@ export function createForest(canvas, state) {
       ctx.save(); ctx.fillStyle = atmo.seasonMist; ctx.fillRect(0, 0, W, H); ctx.restore();
     }
 
-    // 背景の小さな canopy 群(ノード総数で密度が増える)
     const totalNodes = (state.trees || []).reduce((s, t) => s + (t.nodes?.length || 0), 0);
     const roomSeed = (state.room?.slug || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) || 42;
     drawBackgroundCanopies(ctx, W, H, totalNodes, roomSeed, state.ambience?.canopyDensity ?? 0.5);
 
-    // 樹(world coords)
     ctx.save();
     ctx.translate(state.view.ox, state.view.oy);
     ctx.scale(state.view.scale, state.view.scale);
     const cursor = state.timeCursor;
-    // ビューポートの world 座標範囲(culling用)
     const invS = 1 / state.view.scale;
     const worldLeft = -state.view.ox * invS;
     const worldTop = -state.view.oy * invS;
     const worldRight = worldLeft + W * invS;
     const worldBot = worldTop + H * invS;
-    const MARGIN = 250; // 樹の半径+余裕
-    // 非表示モード
-    //  - 管理者が「全て非表示」ONなら樹を描かない
-    //  - ユーザーが「自分の樹を非表示」ONなら自分の樹だけスキップ
+    const MARGIN = 250;
     if (state.hideAllTrees) { ctx.restore(); critters.render(ctx); return; }
     (state.trees || []).forEach(t => {
       if (cursor) {
@@ -317,7 +317,6 @@ export function createForest(canvas, state) {
       if (state.hideSelfTree && t.id === state.selfTreeId) return;
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
-      // 視界外はスキップ(パフォーマンス)
       if (dx < worldLeft - MARGIN || dx > worldRight + MARGIN ||
           dy < worldTop - MARGIN || dy > worldBot + MARGIN) return;
       const ds = t._displayScale ?? 1.0;
@@ -326,7 +325,6 @@ export function createForest(canvas, state) {
     });
     ctx.restore();
 
-    // critters は screen 座標で最前面に
     critters.render(ctx);
   }
 

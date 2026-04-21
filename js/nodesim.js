@@ -1,183 +1,82 @@
-// ノード粒子シミュレーション
-// 各ノードに (simDX, simDY, vx, vy) を持たせ、
-// tree.js が計算した rest 位置 (_x, _y) に加算して表示する。
-//
-// 設計の主柱:
-//   1. 独立した低周波スウェイ (swayTargetX/Y): 幹の動きとは別位相で
-//      葉ノードがふわふわと定まった軌跡を描く。spring はこの動く
-//      ターゲットに向かって戻ろうとするので、幹と同期せず相対的に動く。
-//   2. 衝突 + 弱い many-body 斥力: 近すぎる葉同士を少し離す。
-//   3. 風(wind): 細かい高周波の揺れ。スウェイに重ねて複雑さを出す。
-//   4. 伸縮 pulse: 見た目の呼吸(描画で参照)。
-//
-// 深さ 0(幹直下)は控えめ、depth≥1 は振幅・バネ緩和を大きく。
+// 最小構成のノードシム
+//   - 各ノードに sway を**直接代入** (simDX/Y)。spring/charge/wind/velocity なし
+//   - ドラッグ中 (_dragging) は simDX/Y を凍結
+//   - hard separation: 実描画半径 n._r ベースで重なりを直接解消(2反復)
 
 const CFG = {
-  COLLIDE_R: 26,
-  COLLIDE_K: 0.45,
-  CHARGE: -120,
-  SPRING_K_BASE: 0.05, // rest(=sway target)へ引き戻す強さ(depth=0)
-  WIND_AMP: 3.2,       // 高周波 wind
-  VEL_DECAY: 0.55,
-  MAX_V_BASE: 10,
-  SIM_CAP_BASE: 80,    // simDX/Y の上限(depth=0)
+  FALLBACK_R: 26,   // n._r が未設定時
+  ITER: 2,          // hard separation 反復数
+  BUFFER: 1.06,     // 最小距離 = (ra + rb) * 1.06
 };
 
 export function tickNodeSim(trees, t, design = null) {
-  const windMul    = design ? (design.nodeShimmer * 2.0)       : 1.0;
-  const pulseAmp   = design ? (design.nodePulseAmp   ?? 0.4)   : 0.4;
-  const pulseSpeed = design ? (design.nodePulseSpeed ?? 0.4)   : 0.4;
-  const nodeDrift  = design ? (design.nodeDrift     ?? 0.6)    : 0.6;
-  const swayDepth  = design ? (design.nodeSwayDepth ?? 0.7)    : 0.7;
+  const windMul    = design ? (design.nodeShimmer  * 2.0)   : 1.0;
+  const pulseAmp   = design ? (design.nodePulseAmp   ?? 0.4) : 0.4;
+  const pulseSpeed = design ? (design.nodePulseSpeed ?? 0.4) : 0.4;
+  const nodeDrift  = design ? (design.nodeDrift    ?? 0.6)   : 0.6;
+  const swayDepth  = design ? (design.nodeSwayDepth ?? 0.7)  : 0.7;
 
   const all = [];
   trees.forEach(tree => {
     (tree.nodes || []).forEach(n => {
       if (n._x == null) return;
-      if (n.simDX == null) { n.simDX = 0; n.simDY = 0; n.vx = 0; n.vy = 0; }
+      if (n.simDX == null) { n.simDX = 0; n.simDY = 0; }
       all.push({ n, tree, depth: n._depth || 0 });
     });
   });
   if (all.length === 0) return;
 
-  // depth ごとのパラメータ
-  //   depth=0: 幹直下、硬め
-  //   depth>=1: nodeDrift / swayDepth で大きく緩く
-  function springK(depth) {
-    if (depth === 0) return CFG.SPRING_K_BASE;
-    const loosen = nodeDrift * 0.55 + Math.min(depth, 3) * swayDepth * 0.08;
-    return Math.max(0.012, CFG.SPRING_K_BASE * (1 - Math.min(0.8, loosen)));
-  }
-  function maxV(depth) {
-    if (depth === 0) return CFG.MAX_V_BASE;
-    const boost = 1 + nodeDrift * 0.8 + Math.min(depth, 3) * swayDepth * 0.20;
-    return CFG.MAX_V_BASE * boost;
-  }
-  function simCap(depth) {
-    if (depth === 0) return CFG.SIM_CAP_BASE;
-    const boost = 1 + nodeDrift * 1.8 + Math.min(depth, 3) * swayDepth * 0.50;
-    return CFG.SIM_CAP_BASE * boost;
-  }
-  // 低周波スウェイの振幅(px)
-  //   depth=0 は控えめ、depth≥1 で大きく
+  // 深さ別振幅:depth=0 控えめ、depth≥1 で大きく
   function swayAmp(depth) {
-    if (depth === 0) return 20 + nodeDrift * 30; // 幹直下は 20〜50px
-    const base = 60 + nodeDrift * 160;           // 60〜220 px
-    const depthBoost = 1 + Math.min(depth - 1, 2) * swayDepth * 0.5;
-    return base * depthBoost;
-  }
-  // 高周波 wind の振幅(spring を押す微振動)
-  function windAmp(depth) {
-    if (depth === 0) return CFG.WIND_AMP;
-    const boost = 1 + nodeDrift * 0.6 + Math.min(depth, 3) * swayDepth * 0.3;
-    return CFG.WIND_AMP * boost;
+    if (depth === 0) return (8 + nodeDrift * 22) * windMul;
+    const base = (25 + nodeDrift * 75) * windMul;           // 25〜100 px 中立
+    const boost = 1 + Math.min(depth - 1, 2) * swayDepth * 0.45;
+    return base * boost;
   }
 
-  // 1) スウェイ target → spring で引き寄せ
-  //    各ノードは id/text から位相を作り、独立した低周波軌跡を描く
+  // 1) sway を直接代入(dragging は凍結)
   for (const { n, depth } of all) {
-    const seed = (n.id && n.id.charCodeAt ? n.id.charCodeAt(0) : 0)
-               + (n.text?.length || 0)
-               + (n.text?.charCodeAt(1) || 0);
-    const ph = seed * 0.17;
-    const amp = swayAmp(depth) * windMul;
-    // 2周期重ねて複雑な軌跡に(幹と同じ手法で位相を大きくずらす)
-    const tgtX = Math.sin(t * 0.13 + ph * 2.3) * amp
-               + Math.sin(t * 0.063 + ph * 1.1) * amp * 0.45;
-    const tgtY = Math.cos(t * 0.105 + ph * 1.8) * amp
-               + Math.cos(t * 0.048 + ph * 0.9) * amp * 0.4;
-    n._swayTargetX = tgtX;
-    n._swayTargetY = tgtY;
-
     if (n._dragging) continue;
-    // spring: simDX を tgtX に向けて引く
-    const k = springK(depth);
-    n.vx -= (n.simDX - tgtX) * k;
-    n.vy -= (n.simDY - tgtY) * k;
+    const seed = (n.id && n.id.charCodeAt)
+      ? (n.id.charCodeAt(0) + (n.id.charCodeAt(1) || 0))
+      : 0;
+    const ph = seed * 0.17 + (n.text?.length || 0) * 0.11;
+    const amp = swayAmp(depth);
+    const sx = Math.sin(t * 0.13 + ph)         * amp
+             + Math.sin(t * 0.063 + ph * 1.7)  * amp * 0.4;
+    const sy = Math.cos(t * 0.105 + ph * 1.3)  * amp
+             + Math.cos(t * 0.048 + ph * 0.9)  * amp * 0.35;
+    n.simDX = sx;
+    n.simDY = sy;
   }
 
-  // 2) 衝突 + 弱い many-body 斥力
-  for (let i = 0; i < all.length; i++) {
-    const a = all[i].n;
-    const ax = (a._x || 0) + a.simDX, ay = (a._y || 0) + a.simDY;
-    for (let j = i + 1; j < all.length; j++) {
-      const b = all[j].n;
-      const bx = (b._x || 0) + b.simDX, by = (b._y || 0) + b.simDY;
-      const dx = bx - ax, dy = by - ay;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < 1 || d2 > 40000) continue;
-      const d = Math.sqrt(d2);
-      if (d < CFG.COLLIDE_R) {
-        const overlap = (CFG.COLLIDE_R - d) * CFG.COLLIDE_K;
-        const ux = dx / d, uy = dy / d;
-        if (!a._dragging) { a.vx -= ux * overlap; a.vy -= uy * overlap; }
-        if (!b._dragging) { b.vx += ux * overlap; b.vy += uy * overlap; }
-      } else {
-        const f = CFG.CHARGE / d2;
-        const ux = dx / d, uy = dy / d;
-        if (!a._dragging) { a.vx -= ux * f * 0.5; a.vy -= uy * f * 0.5; }
-        if (!b._dragging) { b.vx += ux * f * 0.5; b.vy += uy * f * 0.5; }
-      }
-    }
-  }
-
-  // 3) 高周波 wind + sizePulse
+  // 2) pulse(描画で使う伸縮)
   const pulseFreq = 0.15 + pulseSpeed * 1.15;
   const pulseAmpl = pulseAmp * 0.35;
-  for (const { n, depth } of all) {
-    const seed = (n.id && n.id.charCodeAt ? n.id.charCodeAt(0) : 0)
+  for (const { n } of all) {
+    const seed = (n.text?.charCodeAt(0) || 0)
+               + (n.text?.charCodeAt(1) || 0)
                + (n.text?.length || 0);
-    const ph = seed * 0.17;
-    if (!n._dragging) {
-      const amp = windAmp(depth);
-      const wx = (Math.sin(t * 0.95 + ph) * amp + Math.sin(t * 0.32 + ph * 2.1) * amp * 0.5) * windMul;
-      const wy = (Math.cos(t * 0.82 + ph * 1.3) * amp + Math.cos(t * 0.27 + ph) * amp * 0.5) * windMul;
-      n.vx += wx * 0.06;
-      n.vy += wy * 0.06;
-    }
-    const pPh = ph * 1.7 + ((n.text?.charCodeAt(0) || 0) * 0.31);
-    n._sizeScale = 1 + Math.sin(t * pulseFreq + pPh) * pulseAmpl;
+    const ph = seed * 0.31;
+    n._sizeScale = 1 + Math.sin(t * pulseFreq + ph) * pulseAmpl;
   }
 
-  // 4) 積分 + ダンピング + キャップ(深さ依存)
-  for (const { n, depth } of all) {
-    if (n._dragging) { n.vx = 0; n.vy = 0; continue; }
-    n.vx *= CFG.VEL_DECAY;
-    n.vy *= CFG.VEL_DECAY;
-    const mv = maxV(depth);
-    if (n.vx >  mv) n.vx =  mv;
-    if (n.vx < -mv) n.vx = -mv;
-    if (n.vy >  mv) n.vy =  mv;
-    if (n.vy < -mv) n.vy = -mv;
-    n.simDX += n.vx;
-    n.simDY += n.vy;
-    const cap = simCap(depth);
-    if (n.simDX >  cap) n.simDX =  cap;
-    if (n.simDX < -cap) n.simDX = -cap;
-    if (n.simDY >  cap) n.simDY =  cap;
-    if (n.simDY < -cap) n.simDY = -cap;
-  }
-
-  // 5) 重なりの硬い補正(実半径ベース、2回反復)
-  //    描画半径 n._r が既に入っていれば使用、なければ COLLIDE_R で代用
-  //    simDX/Y を直接動かすので spring と戦わない即時補正
-  const ITER = 2;
-  const BUFFER = 1.06; // 最小距離 = (ra + rb) * 1.06
-  for (let iter = 0; iter < ITER; iter++) {
+  // 3) hard separation(実半径ベース、2反復)
+  for (let iter = 0; iter < CFG.ITER; iter++) {
     for (let i = 0; i < all.length; i++) {
       const a = all[i].n;
-      const ra = a._r || CFG.COLLIDE_R;
+      const ra = a._r || CFG.FALLBACK_R;
       const ax = (a._x || 0) + a.simDX, ay = (a._y || 0) + a.simDY;
       for (let j = i + 1; j < all.length; j++) {
         const b = all[j].n;
-        const rb = b._r || CFG.COLLIDE_R;
-        const minD = (ra + rb) * BUFFER;
+        const rb = b._r || CFG.FALLBACK_R;
+        const minD = (ra + rb) * CFG.BUFFER;
         const bx = (b._x || 0) + b.simDX, by = (b._y || 0) + b.simDY;
         const dx = bx - ax, dy = by - ay;
         const d2 = dx * dx + dy * dy;
         if (d2 >= minD * minD || d2 < 0.0001) continue;
         const d = Math.sqrt(d2);
-        const push = (minD - d) / 2;  // 半々で引き離す
+        const push = (minD - d) / 2;
         const ux = dx / d, uy = dy / d;
         if (!a._dragging) { a.simDX -= ux * push; a.simDY -= uy * push; }
         if (!b._dragging) { b.simDX += ux * push; b.simDY += uy * push; }
@@ -186,33 +85,13 @@ export function tickNodeSim(trees, t, design = null) {
   }
 }
 
-// ノード作成/編集時のインパルス: テキストのハッシュから方向を決める
-export function impulseFor(node, magnitude = 4) {
+// 作成/編集時の小さな「ふわっ」アニメ用(互換のため残す、軽い効果のみ)
+export function impulseFor(node /*, magnitude = 4 */) {
   if (!node) return;
-  const seed = (node.text || '').split('').reduce((a,c) => a + c.charCodeAt(0), 0);
-  const angle = (seed % 360) * Math.PI / 180;
-  node.simDX = node.simDX || 0;
-  node.simDY = node.simDY || 0;
-  node.vx = (node.vx || 0) + Math.cos(angle) * magnitude;
-  node.vy = (node.vy || 0) + Math.sin(angle) * magnitude;
+  // 最小構成では位置は sway で決まるので、ここでは何もしない
 }
 
-// 他ノードへ波紋を送る: 距離に応じて外向きインパルス
-export function ripple(fromNode, trees, strength = 3) {
-  if (!fromNode || fromNode._x == null) return;
-  const fx = (fromNode._x || 0) + (fromNode.simDX || 0);
-  const fy = (fromNode._y || 0) + (fromNode.simDY || 0);
-  trees.forEach(t => {
-    (t.nodes || []).forEach(n => {
-      if (n === fromNode || n._x == null) return;
-      const nx = (n._x || 0) + (n.simDX || 0);
-      const ny = (n._y || 0) + (n.simDY || 0);
-      const dx = nx - fx, dy = ny - fy;
-      const d = Math.hypot(dx, dy) || 1;
-      if (d > 200) return;
-      const mag = strength * (1 - d / 200);
-      n.vx = (n.vx || 0) + dx / d * mag;
-      n.vy = (n.vy || 0) + dy / d * mag;
-    });
-  });
+// 他ノードへの波紋(互換のため残す、no-op)
+export function ripple(/* fromNode, trees, strength = 3 */) {
+  // 最小構成では no-op
 }

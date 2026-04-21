@@ -59,6 +59,9 @@ async function initRoom() {
     ambience: mergeAmbience(null),
     hideAllTrees: false,   // 管理者用(ローカル)
     hideSelfTree: false,   // ユーザー用(ローカル)
+    // セッションごとに変わる乱数シード。layoutRandom が x=y=0 の樹を
+    // ばらまくときに使う(=開くたびに配置が変わる)
+    sessionSeed: Math.floor(Math.random() * 2147483647) + 1,
   };
   const HIDE_ALL_KEY  = 'mori.hideAll.'  + slug;
   const HIDE_SELF_KEY = 'mori.hideSelf.' + slug;
@@ -534,7 +537,7 @@ async function initRoom() {
     nodes.forEach(n => (byTree[n.tree_id] ||= []).push(n));
     trees.forEach(t => { t.nodes = (byTree[t.id] || []).sort((a,b) => a.ord - b.ord); });
     state.trees = trees;
-    layoutRandom(state.trees);
+    layoutRandom(state.trees, state.sessionSeed);
     document.getElementById('forest-count').textContent = `${trees.length}本の樹`;
   }
 }

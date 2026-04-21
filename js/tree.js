@@ -239,6 +239,21 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0, design = DESIGN_D
   function walk(parentId, px, py, centerAngle, sector, depth) {
     const children = hierarchy.get(parentId) || [];
     const n = children.length;
+    // 兄弟の最大表示半径 (roughly) を見積もり、円周が足りるよう baseLen を広げる
+    // child 半径 ≈ (18 + size*5) * scale * (depth===0 ? 1 : 0.92) * nodeSizeMul
+    const sizeScale = depth === 0 ? 1 : 0.92;
+    const maxChildR = children.reduce((mx, c) => {
+      const r = (18 + (c.size || 3) * 5.0) * scale * sizeScale * nodeSizeMul;
+      return r > mx ? r : mx;
+    }, 0);
+    // 必要な半径 = 兄弟数 * 2 * r * 1.15 / (2π) ≈ n * r * 0.366
+    // 扇形配置(depth≥1)は sector/(2π) の割合しか使わないので割る
+    const arcFrac = depth === 0 ? 1 : (sector / (Math.PI * 2));
+    const requiredLen = n > 1
+      ? (n * maxChildR * 2.3) / (Math.PI * 2 * arcFrac)
+      : 0;
+    const defaultLen = (depth === 0 ? 108 : 72) * scale;
+    const baseLen = Math.max(defaultLen, requiredLen);
     children.forEach((child, i) => {
       let a;
       if (depth === 0) {
@@ -248,7 +263,6 @@ export function computeAllPositions(tree, cx, cy, scale = 1.0, design = DESIGN_D
       }
       a += (rng() - 0.5) * (depth === 0 ? 0.25 : 0.2);
 
-      const baseLen = (depth === 0 ? 108 : 72) * scale;
       const sizeFactor = 0.85 + (child.size || 3) * 0.05;
       const len = baseLen * sizeFactor * (0.9 + rng() * 0.3);
 
