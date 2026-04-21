@@ -11,8 +11,6 @@ const CFG = {
 
 export function tickNodeSim(trees, t, design = null) {
   const windMul    = design ? (design.nodeShimmer  * 2.0)   : 1.0;
-  const pulseAmp   = design ? (design.nodePulseAmp   ?? 0.4) : 0.4;
-  const pulseSpeed = design ? (design.nodePulseSpeed ?? 0.4) : 0.4;
   const nodeDrift  = design ? (design.nodeDrift    ?? 0.6)   : 0.6;
   const swayDepth  = design ? (design.nodeSwayDepth ?? 0.7)  : 0.7;
 
@@ -50,33 +48,31 @@ export function tickNodeSim(trees, t, design = null) {
     n.simDY = sy;
   }
 
-  // 2) pulse(描画で使う伸縮)
-  const pulseFreq = 0.15 + pulseSpeed * 1.15;
-  const pulseAmpl = pulseAmp * 0.35;
-  for (const { n } of all) {
-    const seed = (n.text?.charCodeAt(0) || 0)
-               + (n.text?.charCodeAt(1) || 0)
-               + (n.text?.length || 0);
-    const ph = seed * 0.31;
-    n._sizeScale = 1 + Math.sin(t * pulseFreq + ph) * pulseAmpl;
-  }
+  // (サイズ脈動は廃止 — ノードの大きさは design.nodeSize のみで決まる)
 
-  // 3) hard separation(実半径ベース、2反復)
+  // 2) hard separation(実半径ベース、2反復)
+  //    位置は _restX + simDX を使う。n._x には前フレームの simDX が既に
+  //    畳み込まれているので使ってはいけない(二重加算でワープする)
+  const PUSH_CAP = 40; // 1反復あたりの最大補正量
   for (let iter = 0; iter < CFG.ITER; iter++) {
     for (let i = 0; i < all.length; i++) {
       const a = all[i].n;
       const ra = a._r || CFG.FALLBACK_R;
-      const ax = (a._x || 0) + a.simDX, ay = (a._y || 0) + a.simDY;
+      const arx = a._restX != null ? a._restX : (a._x || 0) - (a.simDX || 0);
+      const ary = a._restY != null ? a._restY : (a._y || 0) - (a.simDY || 0);
+      const ax = arx + a.simDX, ay = ary + a.simDY;
       for (let j = i + 1; j < all.length; j++) {
         const b = all[j].n;
         const rb = b._r || CFG.FALLBACK_R;
         const minD = (ra + rb) * CFG.BUFFER;
-        const bx = (b._x || 0) + b.simDX, by = (b._y || 0) + b.simDY;
+        const brx = b._restX != null ? b._restX : (b._x || 0) - (b.simDX || 0);
+        const bry = b._restY != null ? b._restY : (b._y || 0) - (b.simDY || 0);
+        const bx = brx + b.simDX, by = bry + b.simDY;
         const dx = bx - ax, dy = by - ay;
         const d2 = dx * dx + dy * dy;
         if (d2 >= minD * minD || d2 < 0.0001) continue;
         const d = Math.sqrt(d2);
-        const push = (minD - d) / 2;
+        const push = Math.min(PUSH_CAP, (minD - d) / 2);
         const ux = dx / d, uy = dy / d;
         if (!a._dragging) { a.simDX -= ux * push; a.simDY -= uy * push; }
         if (!b._dragging) { b.simDX += ux * push; b.simDY += uy * push; }

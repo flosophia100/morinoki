@@ -218,7 +218,7 @@ function adminDesignTab(state) {
 }
 
 function adminShimmerTab(state) {
-  const keys = ['shimmerAmp','shimmerSpeed','nodeShimmer','nodePulseAmp','nodePulseSpeed','nodeDrift','nodeSwayDepth'];
+  const keys = ['shimmerAmp','shimmerSpeed','nodeShimmer','nodeDrift','nodeSwayDepth'];
   return `
     <div class="ip-block">
       <label class="mini-label">ゆらぎ</label>

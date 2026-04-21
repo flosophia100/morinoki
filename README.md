@@ -151,6 +151,108 @@ TARGET_BASE=https://morinokki.vercel.app node test-phase4.mjs
 
 ---
 
+## ゆらぎ(motion)仕様
+
+最小構成の設計思想。drift / velocity / spring / 引力などの**動的シミュレーションは持たず**、
+`Math.sin / Math.cos` の純粋関数で毎フレーム位置を直接代入する。
+
+### 合成式
+
+```
+tree._displayX = tree.x + tree._swayX
+node display   = tree._displayX + offset_x + simDX   (= rest + simDX)
+```
+
+`tree._swayX/_swayY` と `n.simDX/simDY` はすべてクライアントローカルの視覚演出。DB には保存しない。
+
+### 幹 sway (`js/liveforest.js`)
+
+```js
+const seed = stringHash(tree.id);
+_swayX = (sin(t*0.09 + pX) * 110 + sin(t*0.045 + pX*1.7) * 55) * ampMul;
+_swayY = (cos(t*0.075 + pY) * 90 + cos(t*0.038 + pY*1.3) * 40) * ampMul;
+```
+
+- 2周期を重ねて複雑な軌跡
+- 位相は `tree.id` ハッシュ由来 → 樹ごとに独立
+- `ampMul = 0.25 + shimmerAmp * 2.75`、`speedMul = 0.4 + shimmerSpeed * 1.2`
+
+### ノード sway (`js/nodesim.js`)
+
+```js
+const ph = (id[0]+id[1])*0.17 + text.length*0.11;
+const amp = swayAmp(depth);
+simDX = sin(t*0.13 + ph) * amp + sin(t*0.063 + ph*1.7) * amp * 0.4;
+simDY = cos(t*0.105 + ph*1.3) * amp + cos(t*0.048 + ph*0.9) * amp * 0.35;
+```
+
+深さ別振幅:
+
+```
+depth=0  : (8  + nodeDrift*22) * windMul          幹直下 〜30px
+depth≥1  : (25 + nodeDrift*75) * windMul * boost  葉 〜100px+
+          boost = 1 + min(depth-1, 2) * swayDepth * 0.45
+windMul  = nodeShimmer * 2.0
+```
+
+### 重なり防止(hard separation)
+
+`sway` 代入後、全ノードペアを2反復チェック。位置は **`_restX + simDX`** を使う
+(`n._x` には前フレームの simDX が既に畳み込まれているため使うと二重加算になる)。
+
+```
+minD  = (ra + rb) * 1.06         半径は n._r(描画半径)
+push  = min(40, (minD - d) / 2)  1反復の上限 40px
+simDX を ±push で直接上書き
+```
+
+### rest 位置の配置(兄弟重なり予防)
+
+`tree.js` `computeAllPositions` で、兄弟数と最大子半径から必要な `baseLen` を算出:
+
+```
+requiredLen = n * maxChildR * 2.3 / (2π * arcFrac)
+baseLen     = max(defaultLen, requiredLen)
+```
+
+これで**同じ親の兄弟**は rest で重ならない。cross-tree(別樹の葉)は hard separation が対応。
+
+### ドラッグの挙動
+
+1. **mousedown**: `obj._dragging = true` だけ立てる(ベーク処理なし)
+2. **mousemove**: `tree.x = origX + worldDx` または `offset_x = origOff + worldDx`
+3. tick / nodesim は `_dragging=true` を見て sway 更新をスキップ → **sway 凍結**
+4. 表示 = `tree.x + 凍結sway` = マウスに完全追従
+5. **mouseup**: `_dragging = false`。sway 再開(小さな位相差のみなのでジャンプなし)
+
+### 管理者パラメータ(ゆらぎタブ)
+
+| key | 効果 |
+|---|---|
+| `shimmerAmp` | 幹 sway の振幅倍率(×0.25〜×3.0)|
+| `shimmerSpeed` | 時間の進みを ×0.4〜×1.6 倍 |
+| `nodeShimmer` | ノード sway 全体倍率(×0〜×2)|
+| `nodeDrift` | 葉の基本振幅 |
+| `nodeSwayDepth` | 深い階層ほど振幅増幅 |
+
+### 廃止済みの機構
+
+- サイズ脈動(`nodePulseAmp/Speed`) — ゆらぎは位置のみ
+- 文言類似による引力(`textAffinity`) — 最小構成では計算しない
+- 樹間の累積 drift、類似樹の引力、中心引力、樹間斥力 — 全廃
+- ノードの spring / charge / wind velocity / インパルス — 全廃
+
+### 決定論性
+
+幹・ノードの位相はそれぞれ `tree.id` / `node.id + text` から決まるが、
+`this.t` はクライアントごとにページ開いた時刻からスタートするため、
+**複数ユーザー間で位置は同期しない**。完全同期するなら以下のどちらかが必要:
+
+1. `this.t = (Date.now() - EPOCH) / 1000` にして共通の wall-clock 時計に揃える
+2. サーバー側でシムを実行しブロードキャスト(要インフラ追加)
+
+---
+
 ## 今後の拡張余地(未実装)
 
 - **AI埋め込み類似度**: OpenAI `text-embedding-3-small` で「ピアノ」と「音楽」のような意味的類似。Supabase Edge Function経由で実装するとanonキー露出を避けられる

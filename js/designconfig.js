@@ -16,8 +16,6 @@ export const DEFAULTS = {
   shimmerAmp: 0.5,      // 幹の漂い・振れ幅(0=ほぼ静止, 1=フィールドを広く漂う)
   shimmerSpeed: 0.5,    // 幹の漂い・速さ(0=ゆっくり, 1=速い)
   nodeShimmer: 0.4,     // ノード個別のゆらぎ(位置)
-  nodePulseAmp: 0.4,    // ノードの伸縮・幅(0=同じ大きさ, 1=大きく伸縮)
-  nodePulseSpeed: 0.4,  // ノードの伸縮・速さ
   nodeDrift: 0.6,       // 葉ノードの漂い(0=rest固定, 1=大きく漂う)
   nodeSwayDepth: 0.7,   // 深い階層ほど揺れる倍率(0=均一, 1=葉先ほど大振り)
 };
@@ -97,8 +95,6 @@ export const META = [
   { key: 'shimmerAmp',      label: '幹の漂い(距離)' },
   { key: 'shimmerSpeed',    label: '幹の漂い(速さ)' },
   { key: 'nodeShimmer',     label: 'ノードのゆらぎ(位置)' },
-  { key: 'nodePulseAmp',    label: 'ノードの伸縮(幅)' },
-  { key: 'nodePulseSpeed',  label: 'ノードの伸縮(速さ)' },
   { key: 'nodeDrift',       label: '葉ノードの漂い(範囲)' },
   { key: 'nodeSwayDepth',   label: '葉先ほど揺れる' },
 ];
