@@ -67,8 +67,7 @@ export function tickNodeSim(trees, t, design = null, fadeIn = 1.0) {
     n.simDY = ry + n._sepY;
   }
 
-  // 2) ノード同士の hard separation(rest + simDX 基準)
-  //    _sepX を更新すると同時に simDX も即反映(同フレーム内で effectively 再計算)
+  // 2) ノード同士の hard separation(push は fadeIn でスケール — 初回スナップ抑制)
   for (let iter = 0; iter < CFG.ITER; iter++) {
     for (let i = 0; i < all.length; i++) {
       const a = all[i].n;
@@ -88,7 +87,7 @@ export function tickNodeSim(trees, t, design = null, fadeIn = 1.0) {
         const d2 = dx * dx + dy * dy;
         if (d2 >= minD * minD || d2 < 0.0001) continue;
         const d = Math.sqrt(d2);
-        const push = Math.min(CFG.PUSH_CAP, (minD - d) / 2);
+        const push = Math.min(CFG.PUSH_CAP, (minD - d) / 2) * fadeIn;
         const ux = dx / d, uy = dy / d;
         if (!a._dragging) {
           a._sepX -= ux * push; a._sepY -= uy * push;
@@ -102,8 +101,7 @@ export function tickNodeSim(trees, t, design = null, fadeIn = 1.0) {
     }
   }
 
-  // 3) ノード vs 他樹の幹(= cross-type)
-  //    node は移動、trunk は動かさない(trunk-trunk 分離に任せる)
+  // 3) ノード vs 他樹の幹(= cross-type, push も fadeIn でスケール)
   for (let iter = 0; iter < CFG.ITER; iter++) {
     for (let i = 0; i < all.length; i++) {
       const a = all[i].n;
@@ -114,7 +112,7 @@ export function tickNodeSim(trees, t, design = null, fadeIn = 1.0) {
       const ary = a._restY != null ? a._restY : (a._y - (a.simDY || 0));
       const ax = arx + a.simDX, ay = ary + a.simDY;
       for (const tree of trees) {
-        if (tree === aTree) continue; // 自樹の幹は除外(角度配置で既に離れている)
+        if (tree === aTree) continue; // 自樹の幹は除外
         const rb = trunkRadiusFor(tree, 1, design || undefined);
         const minD = (ra + rb) * CFG.BUFFER;
         const bx = tree._displayX ?? tree.x;
@@ -123,8 +121,7 @@ export function tickNodeSim(trees, t, design = null, fadeIn = 1.0) {
         const d2 = dx * dx + dy * dy;
         if (d2 >= minD * minD || d2 < 0.0001) continue;
         const d = Math.sqrt(d2);
-        // 幹は動かさないので、葉側に full push
-        const push = Math.min(CFG.PUSH_CAP, minD - d);
+        const push = Math.min(CFG.PUSH_CAP, minD - d) * fadeIn;
         const ux = dx / d, uy = dy / d;
         if (!a._dragging) {
           a._sepX -= ux * push; a._sepY -= uy * push;

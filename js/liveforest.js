@@ -97,7 +97,7 @@ export class LiveForest {
       t._swayY = rawY + t._sepY;
     });
 
-    // 幹同士 hard separation
+    // 幹同士 hard separation(push も fadeIn でスケール — 初回のスナップを抑制)
     for (let iter = 0; iter < TRUNK_CFG.ITER; iter++) {
       for (let i = 0; i < trees.length; i++) {
         const A = trees[i];
@@ -114,7 +114,7 @@ export class LiveForest {
           const d2 = dx * dx + dy * dy;
           if (d2 >= minD * minD || d2 < 0.0001) continue;
           const d = Math.sqrt(d2);
-          const push = Math.min(TRUNK_CFG.PUSH_CAP, (minD - d) / 2);
+          const push = Math.min(TRUNK_CFG.PUSH_CAP, (minD - d) / 2) * fadeIn;
           const ux = dx / d, uy = dy / d;
           if (!A._dragging) {
             A._sepX -= ux * push; A._sepY -= uy * push;
