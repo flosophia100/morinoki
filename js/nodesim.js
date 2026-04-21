@@ -157,6 +157,33 @@ export function tickNodeSim(trees, t, design = null) {
     if (n.simDY >  cap) n.simDY =  cap;
     if (n.simDY < -cap) n.simDY = -cap;
   }
+
+  // 5) 重なりの硬い補正(実半径ベース、2回反復)
+  //    描画半径 n._r が既に入っていれば使用、なければ COLLIDE_R で代用
+  //    simDX/Y を直接動かすので spring と戦わない即時補正
+  const ITER = 2;
+  const BUFFER = 1.06; // 最小距離 = (ra + rb) * 1.06
+  for (let iter = 0; iter < ITER; iter++) {
+    for (let i = 0; i < all.length; i++) {
+      const a = all[i].n;
+      const ra = a._r || CFG.COLLIDE_R;
+      const ax = (a._x || 0) + a.simDX, ay = (a._y || 0) + a.simDY;
+      for (let j = i + 1; j < all.length; j++) {
+        const b = all[j].n;
+        const rb = b._r || CFG.COLLIDE_R;
+        const minD = (ra + rb) * BUFFER;
+        const bx = (b._x || 0) + b.simDX, by = (b._y || 0) + b.simDY;
+        const dx = bx - ax, dy = by - ay;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= minD * minD || d2 < 0.0001) continue;
+        const d = Math.sqrt(d2);
+        const push = (minD - d) / 2;  // 半々で引き離す
+        const ux = dx / d, uy = dy / d;
+        if (!a._dragging) { a.simDX -= ux * push; a.simDY -= uy * push; }
+        if (!b._dragging) { b.simDX += ux * push; b.simDY += uy * push; }
+      }
+    }
+  }
 }
 
 // ノード作成/編集時のインパルス: テキストのハッシュから方向を決める

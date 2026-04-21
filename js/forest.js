@@ -1,15 +1,29 @@
 import { drawTree, trunkRadiusFor } from './tree.js';
-import { seededRandom } from './utils.js';
+import { seededRandom, stringHash } from './utils.js';
 import { atmosphereAt } from './atmosphere.js';
 import { Critters, drawBackgroundCanopies } from './critters.js';
 
+// 樹数に応じたフィールド半径(中心から)
+// 1本 → 820px、10本 → 1296px、30本 → 1804px
+export function fieldRadiusFor(treeCount) {
+  return Math.max(600, Math.sqrt(Math.max(1, treeCount)) * 220);
+}
+
 export function layoutRandom(trees) {
+  const R = fieldRadiusFor(trees.length);
   trees.forEach((t) => {
     const x = Number(t.x), y = Number(t.y);
     if (!isFinite(x) || !isFinite(y) || (x === 0 && y === 0)) {
-      const rng = seededRandom(Number(t.seed) || 1);
-      t.x = (rng() - 0.5) * 1200;
-      t.y = (rng() - 0.5) * 1200;
+      // 名前は使わず、tree.id(UUID) ハッシュから決定論的にランダム配置
+      const basis = typeof t.id === 'string' && t.id.length
+        ? stringHash(t.id)
+        : (Number(t.seed) || 1);
+      const rng = seededRandom(Math.max(1, basis));
+      // 円内一様分布(sqrt で境界に寄らないように)
+      const theta = rng() * Math.PI * 2;
+      const r = R * Math.sqrt(rng());
+      t.x = Math.cos(theta) * r;
+      t.y = Math.sin(theta) * r;
     } else {
       t.x = x; t.y = y;
     }

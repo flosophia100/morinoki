@@ -1,5 +1,6 @@
 import { stringHash } from './utils.js';
 import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './nodesim.js';
+import { fieldRadiusFor } from './forest.js';
 
 // 軽量な「生きている森」シミュレータ
 // - 風: 各樹が独自の位相でゆっくりゆらぐ
@@ -106,12 +107,28 @@ export class LiveForest {
       }
     }
 
+    // フィールド外(半径 R = fieldRadiusFor(treeCount))に出たら中心へ弱く引く
+    //   drift を通じて静かに戻す
+    const fieldR = fieldRadiusFor(trees.length);
+    trees.forEach(t => {
+      if (t._dragging) return;
+      const cx = t.x + (t._driftX || 0);
+      const cy = t.y + (t._driftY || 0);
+      const dist = Math.hypot(cx, cy);
+      if (dist > fieldR) {
+        const over = dist - fieldR;
+        const pull = Math.min(0.5, over * 0.002);
+        t._driftX -= (cx / Math.max(1, dist)) * pull;
+        t._driftY -= (cy / Math.max(1, dist)) * pull;
+      }
+    });
+
     // drift ダンピング。漂いで他ノードに押し出された余力を保持、
-    //   過大になったら緩やかにクランプ
+    //   過大になったらフィールド半径ぶんにクランプ
+    const maxDrift = Math.max(700, fieldR * 1.1);
     trees.forEach(t => {
       t._driftX *= 0.995;
       t._driftY *= 0.995;
-      const maxDrift = 700;
       if (t._driftX > maxDrift) t._driftX = maxDrift;
       if (t._driftX < -maxDrift) t._driftX = -maxDrift;
       if (t._driftY > maxDrift) t._driftY = maxDrift;
