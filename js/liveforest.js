@@ -24,7 +24,9 @@ export class LiveForest {
     this.getTrees = getTrees;
     this.onTick = onTick;
     this.getDesign = getDesign || (() => null);
-    this.t = 0;
+    // this.t = 1.0 で開始 → fadeIn が即 1.0 になり初回ジャンプ抑制のrampは使わず、
+    // 初回表示前に 1回 tick() を呼ぶ pre-tick 方式で「最初の描画＝既に安定した状態」にする
+    this.t = 1.0;
     this.running = false;
     this.rafId = null;
     this.lastSeen = new Set();

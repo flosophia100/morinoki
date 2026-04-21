@@ -362,12 +362,21 @@ async function initRoom() {
   }
   updatePanel();
   updatePlantBtn();
-  forest.render();
 
   // ===== Phase 2: 生きている森 =====
   console.log('[phase2] init');
   const treeIdsRef = new Set((state.trees || []).map(t => t.id));
   const live = new LiveForest(() => state.trees, () => forest.render(), () => state.design);
+
+  // 初回表示の前に 2-step pre-tick で「安定した初期状態」を仕込む。
+  //   1) 最初の render:  nodes の _x / _restX を populate(tree.x ベース)
+  //   2) live.tick():    trunk sway + node sim + hard separation を適用
+  //   3) 次の render:   step 2 を反映した「すでに揺らいで・重なりも解消した」状態
+  // これにより最初にユーザーが見る画面が既に動作中の状態になり、
+  // アプリを開いた瞬間の "ぱっ" という立ち上がりジャンプが消える。
+  forest.render();
+  live.tick();
+  forest.render();
   live.notifyDataChanged();
   live.start();
   console.log('[phase2] liveforest started, treeIds:', [...treeIdsRef]);
