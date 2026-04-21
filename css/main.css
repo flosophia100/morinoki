@@ -175,6 +175,57 @@ body.panel-hidden .forest-container { inset: 0; }
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
+
+/* 説明書きポップアップ */
+.morinokki-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 30, 26, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  backdrop-filter: blur(2px);
+}
+.morinokki-modal {
+  position: relative;
+  background: var(--panel-bg, #f6f2e8);
+  color: var(--ink, #2a2a2a);
+  max-width: 28rem;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.4rem 1.4rem 1.2rem;
+  border-radius: 0.7rem;
+  box-shadow: 0 16px 40px rgba(24, 30, 26, 0.3), 0 0 0 1px rgba(122, 108, 92, 0.2);
+  font-family: 'Shippori Mincho', serif;
+  line-height: 1.6;
+}
+.morinokki-modal-title {
+  font-size: 1.15rem;
+  margin: 0 0 0.6rem;
+  color: var(--moss-deep, #3a4a3f);
+  letter-spacing: 0.05em;
+}
+.morinokki-modal-body {
+  font-size: 0.92rem;
+}
+.morinokki-modal-body p { margin: 0.4rem 0; }
+.morinokki-modal-body ul { padding-left: 1.1rem; margin: 0.4rem 0; }
+.morinokki-modal-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  color: var(--ink-soft, #777);
+  padding: 0.2rem 0.5rem;
+  line-height: 1;
+}
+.morinokki-modal-close:hover { color: var(--ink, #2a2a2a); }
 /* plant-btn removed */
 .ip-auth-form input[type="text"],
 .ip-auth-form input[type="password"],

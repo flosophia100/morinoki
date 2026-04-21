@@ -90,6 +90,11 @@ async function initRoom() {
       const { showToast } = await import('./toast.js');
       if (row.kind === 'passcode_change') showToast('合言葉を変更しました', 'success');
       else if (row.kind === 'email_change') showToast('メールアドレスを変更しました', 'success');
+      else if (row.kind === 'tree_delete') {
+        showToast('樹(ログインID)を削除しました', 'success');
+        clearSession(slug);
+        state.session = null; state.selfTreeId = null;
+      }
     } catch (e) {
       const { showError } = await import('./toast.js');
       showError(e, 'リンクの検証に失敗しました');
@@ -275,6 +280,11 @@ async function initRoom() {
       if (!state.session?.editToken) throw new Error('ログインが必要です');
       await api.requestEmailChange(state.session.editToken, newEmail, location.origin);
       showToast(`確認メールを ${newEmail} に送りました。リンクをクリックして完了してください。`, 'success');
+    },
+    onRequestTreeDeletion: async () => {
+      if (!state.session?.editToken) throw new Error('ログインが必要です');
+      await api.requestTreeSelfDeletion(state.session.editToken, location.origin);
+      showToast('削除確認メールを送りました。メール内のリンクをクリックすると削除が確定します。', 'success');
     },
     onRequestPasscodeReset: async (name) => {
       const res = await api.requestPasscodeReset(state.room.slug, name, location.origin);

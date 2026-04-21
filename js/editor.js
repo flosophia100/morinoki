@@ -4,6 +4,52 @@ import { META as DESIGN_META, DEFAULTS as DESIGN_DEFAULTS,
          AMBIENCE_DEFAULTS, TIME_CURVE_OPTIONS, SEASON_OPTIONS,
          PALETTE_OPTIONS } from './designconfig.js';
 
+// ===== シンプルな説明書きポップアップ =====
+// title, bodyHtml を与えると、画面中央にモーダルを表示する。
+// クリック外 / Esc / 閉じるボタンで消える。
+function showInfoModal(title, bodyHtml) {
+  // 既存モーダルがあれば閉じる
+  document.querySelectorAll('.morinokki-modal-overlay').forEach(x => x.remove());
+  const overlay = document.createElement('div');
+  overlay.className = 'morinokki-modal-overlay';
+  overlay.innerHTML = `
+    <div class="morinokki-modal">
+      <button class="morinokki-modal-close" aria-label="閉じる">×</button>
+      <h3 class="morinokki-modal-title">${escapeHtml(title)}</h3>
+      <div class="morinokki-modal-body">${bodyHtml}</div>
+    </div>
+  `;
+  const close = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+  overlay.querySelector('.morinokki-modal-close').addEventListener('click', close);
+}
+
+const MYWORD_HINT_HTML = `
+  <p>マイワードは、あなたの興味・関心・好きなものなどを言葉で表したものです。</p>
+  <ul style="margin-left:1rem;line-height:1.7">
+    <li>趣味、好きな場所、気になる話題など自由に</li>
+    <li>短めのキーワードのほうが森全体が見やすくなります</li>
+    <li>似たワードを持つ樹は、森の中で近くに集まる仕掛けがあります</li>
+    <li>色はあとから変更できます。削除も自由</li>
+  </ul>
+`;
+
+const ABOUT_HTML = `
+  <p>morinokki は、一人一人の興味を1本の樹として「森」に植えていく、集合的な興味マップです。</p>
+  <ul style="margin-left:1rem;line-height:1.7">
+    <li>新規作成: 名前と合言葉を登録し、メールで本登録</li>
+    <li>自分の樹にマイワード(枝)を追加して、興味を言葉にする</li>
+    <li>他の人の樹を覗いて、共通の話題や近い関心を発見</li>
+    <li>合言葉はいつでも再設定・変更ができます</li>
+  </ul>
+  <p style="margin-top:0.6rem;font-size:0.85em;color:var(--ink-soft)">
+    個人利用・教育利用を想定したプロトタイプ。重要なデータの保存用途ではありません。
+  </p>
+`;
+
 // ===== CSVエクスポート(主催者向け) =====
 export function exportForestCsv(state) {
   const rows = [['tree_name', 'created_at', 'keyword', 'size', 'color', 'description', 'parent_keyword']];
@@ -100,6 +146,9 @@ function idleHTML(state) {
             <button data-auth-tab="login" class="auth-tab ${tab==='login'?'on':''}">ログイン</button>
             <button data-auth-tab="new" class="auth-tab ${tab==='new'?'on':''}">新規作成</button>
           </div>
+          <p class="ip-hint" style="font-size:0.74rem;text-align:right;margin-bottom:0.4rem">
+            <button data-action="show-about" class="btn-link">morinokkiとは</button>
+          </p>
         ` : ''}
         ${tab === 'login' ? `
           <p class="ip-desc" style="margin-bottom:0.4rem">前に登録した名前と合言葉で入ります。</p>
@@ -300,6 +349,7 @@ function adminToolsTab(state) {
 function wireIdle(el, state, cb) {
   el.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => cb.onExportCsv && cb.onExportCsv());
   el.querySelector('[data-action="timelapse"]')?.addEventListener('click', () => cb.onTimelapse && cb.onTimelapse());
+  el.querySelector('[data-action="show-about"]')?.addEventListener('click', () => showInfoModal('morinokkiとは', ABOUT_HTML));
 
   // タブ切替(ログイン ↔ 新規作成)
   el.querySelectorAll('[data-auth-tab]').forEach(btn => {
@@ -535,6 +585,9 @@ function ownTreeHTML(tree, state = {}) {
         <input id="ip-add-input" type="text" maxlength="20">
         <button id="ip-add-btn" class="btn-sm btn-ink">＋</button>
       </div>
+      <p class="ip-hint" style="font-size:0.74rem;margin-top:0.3rem">
+        <button data-action="show-myword-hint" class="btn-link">マイワードのヒント</button>
+      </p>
     </div>
     <div class="ip-block ip-list">
       <label class="mini-label">マイワード(枝)</label>
@@ -562,6 +615,8 @@ function ownTreeHTML(tree, state = {}) {
     </details>
     <div class="ip-block">
       <button data-action="logout" class="btn-secondary w-full">ログアウト</button>
+      <button data-action="delete-tree" class="btn-danger w-full" style="margin-top:0.4rem">樹(ログインID)を削除する</button>
+      <p class="ip-hint" style="font-size:0.72rem;margin-top:0.3rem">削除を申請すると、登録メール宛の確認リンクをクリックして確定します。樹と登録したマイワードはすべて失われます。</p>
     </div>
   `;
 }
@@ -580,6 +635,15 @@ function kwItemHTML(tree, node) {
 }
 function wireOwnTree(el, state, tree, cb) {
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
+  el.querySelector('[data-action="show-myword-hint"]')?.addEventListener('click', () => showInfoModal('マイワードのヒント', MYWORD_HINT_HTML));
+
+  // 樹(ログインID)の削除申請 — メール認証でのみ確定
+  el.querySelector('[data-action="delete-tree"]')?.addEventListener('click', async () => {
+    if (!confirm('樹(ログインID)の削除を申請します。確認メール内のリンクをクリックして完了します。取り消しできません。よろしいですか?')) return;
+    if (!cb.onRequestTreeDeletion) return;
+    try { await cb.onRequestTreeDeletion(); }
+    catch (e) { import('./toast.js').then(m => m.showError(e, '送信失敗')); }
+  });
 
   // 合言葉変更(メール認証経由)
   const crPassBtn = el.querySelector('#cr-pass-save');

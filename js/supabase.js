@@ -68,6 +68,8 @@ export const api = {
     rpc('request_passcode_change', { p_edit_token: editToken, p_new_passcode: newPasscode, p_base_url: baseUrl || null }),
   requestEmailChange: (editToken, newEmail, baseUrl) =>
     rpc('request_email_change', { p_edit_token: editToken, p_new_email: newEmail, p_base_url: baseUrl || null }),
+  requestTreeSelfDeletion: (editToken, baseUrl) =>
+    rpc('request_tree_self_deletion', { p_edit_token: editToken, p_base_url: baseUrl || null }),
   verifyCredentialChange: (token) =>
     rpc('verify_credential_change', { p_token: token }),
   adminListUsers: (adminToken, roomSlug) =>
