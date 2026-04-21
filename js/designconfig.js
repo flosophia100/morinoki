@@ -3,11 +3,12 @@
 // どれも 0..1 に正規化された値(UIで扱いやすく)
 
 export const DEFAULTS = {
-  lengthVar: 0.15,    // 放射線の長さ変動(0=均一, 1=大きくバラつく) — こんもり
-  density: 0.55,      // 放射線の密度(0=スカスカ, 1=濃密)
+  foliage: 0.75,      // 葉の密集度(0=疎らな点描, 1=びっしり覆う)
+  lengthVar: 0.12,    // 放射線の長さ変動(0=均一, 1=大きくバラつく)
+  density: 0.35,      // 放射線の密度(0=ほぼ無し, 1=多数。葉が主役なので控えめ)
   bend: 0.5,          // 曲線の曲がり具合(0=直線, 1=大きく湾曲)
-  spikeChance: 0.1,   // 外周スパイクの頻度(0=全部短い, 1=全部長く突き出す)
-  spikeLen: 0.3,      // スパイクの長さ倍率(0=短い, 1=長い)
+  spikeChance: 0.06,  // 外周スパイクの頻度(葉の縁に尖りを出す割合)
+  spikeLen: 0.2,      // スパイクの長さ倍率(0=短い, 1=長い)
   nodeSize: 0.5,      // 葉ノードサイズ(0=小, 1=大)
   trunkSize: 0.5,     // 幹サイズ(0=小, 1=大)
   branchThickness: 0.5, // 枝の太さ(0=細い, 1=太い)
@@ -70,6 +71,7 @@ export const SEASON_OPTIONS = [
 export const META = [
   { key: 'trunkSize',       label: '幹の大きさ' },
   { key: 'nodeSize',        label: '枝ノードの大きさ' },
+  { key: 'foliage',         label: '葉の密集度' },
   { key: 'density',         label: '放射線の密度' },
   { key: 'lengthVar',       label: '放射線の長さ変動' },
   { key: 'bend',            label: '放射線の曲がり' },

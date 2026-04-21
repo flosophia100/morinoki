@@ -34,14 +34,15 @@ function strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip)
 }
 
 // ====== 放射状バースト(ノード・幹共通) ======
-// 設定可能パラメタ: design から density, lengthVar, bend, spikeChance, spikeLen を取得
+// 葉の密集 (foliage) を主役に、放射線は控えめな脈として補助
 export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts = {}) {
   const design = opts.design || DESIGN_DEFAULTS;
-  const density = (opts.densityMul || 1.0) * (0.6 + design.density * 1.2); // 0.6〜1.8
-  const jitter = 0.2 + design.bend * 1.2; // 0.2〜1.4
-  const lenVar = design.lengthVar; // 0..1(線の長さ変動の幅)
-  const spikeChance = design.spikeChance; // 0..1
-  const spikeLen = 0.9 + design.spikeLen * 0.7; // 0.9..1.6 の倍率
+  const foliage = typeof design.foliage === 'number' ? design.foliage : 0.75;
+  const density = (opts.densityMul || 1.0) * (0.6 + design.density * 1.2);
+  const jitter = 0.2 + design.bend * 1.2;
+  const lenVar = design.lengthVar;
+  const spikeChance = design.spikeChance;
+  const spikeLen = 0.9 + design.spikeLen * 0.7;
 
   ctx.save();
   const strokeDark = strokeCol || col;
@@ -54,43 +55,104 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   ctx.fill();
   ctx.restore();
 
-  // --- (a) 密な近接曲線(中間層) ---
+  // ==== (A) 葉の密集: 多数の小円を重ねる ====
+  // 3層のアルファバケット(0.22/0.40/0.58)に仕分けてバッチ描画(state-change 削減)
+  const rngLeaf = seededRandom(Math.max(1, Math.floor(seed) + 29));
+  const Nleaf = Math.floor((55 + baseR * 1.6) * (0.3 + foliage * 1.7));
+  const leaves = [[], [], []];
+  for (let i = 0; i < Nleaf; i++) {
+    const bucket = Math.floor(rngLeaf() * 3);
+    // r の分布: 中心寄りに重みをつける(rng^0.6)
+    const rr = Math.pow(rngLeaf(), 0.6) * baseR * 0.95;
+    const theta = rngLeaf() * Math.PI * 2;
+    const leafR = 3.2 + rngLeaf() * (baseR * 0.14);
+    leaves[bucket].push({
+      x: cx + Math.cos(theta) * rr,
+      y: cy + Math.sin(theta) * rr,
+      r: leafR
+    });
+  }
+  ctx.fillStyle = col;
+  for (let b = 0; b < 3; b++) {
+    const group = leaves[b];
+    if (!group.length) continue;
+    ctx.globalAlpha = 0.22 + b * 0.18;
+    ctx.beginPath();
+    for (const l of group) {
+      ctx.moveTo(l.x + l.r, l.y);
+      ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // ==== (B) 微細な陰影(暗色)を散らしてテクスチャ化 ====
+  const rngShade = seededRandom(Math.max(1, Math.floor(seed) + 83));
+  const Nshade = Math.floor((18 + baseR * 0.5) * (0.3 + foliage * 1.2));
+  ctx.fillStyle = strokeDark;
+  ctx.globalAlpha = 0.18;
+  ctx.beginPath();
+  for (let i = 0; i < Nshade; i++) {
+    const rr = Math.pow(rngShade(), 0.5) * baseR * 0.9;
+    const theta = rngShade() * Math.PI * 2;
+    const sx = cx + Math.cos(theta) * rr;
+    const sy = cy + Math.sin(theta) * rr;
+    const sr = 1.6 + rngShade() * 3;
+    ctx.moveTo(sx + sr, sy);
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // ==== (C) 控えめな放射線(葉脈感) ====
   const rngMid = seededRandom(Math.max(1, Math.floor(seed) + 53));
-  const Nmid = Math.floor((22 + baseR * 0.45) * density);
+  const Nmid = Math.floor((10 + baseR * 0.2) * density);
   for (let i = 0; i < Nmid; i++) {
-    const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.3;
-    // ベース 0.7 で lenVar 分だけ変動(既定の lenVar=0.15 なら 0.7〜0.745)
-    const len = baseR * (0.7 + rngMid() * lenVar * 0.3);
+    const a = (Math.PI * 2 * i) / Nmid + (rngMid() - 0.5) * 0.35;
+    const len = baseR * (0.65 + rngMid() * lenVar * 0.3);
     const bend = (rngMid() * 2 - 1) * len * 0.22 * jitter;
-    const alpha = 0.5 + rngMid() * 0.4;
-    const wBase = 2.2 + rngMid() * 1.2;
-    const wTip = 0.5 + rngMid() * 0.4;
-    strokeTaperedRadial(ctx, cx, cy, a, len, bend, col, alpha, wBase, wTip);
+    const alpha = 0.25 + rngMid() * 0.25;
+    const wBase = 1.2 + rngMid() * 0.8;
+    const wTip = 0.35 + rngMid() * 0.25;
+    strokeTaperedRadial(ctx, cx, cy, a, len, bend, strokeDark, alpha, wBase, wTip);
   }
 
-  // --- (b) 外周(こんもり: 大半はbaseR近く、スパイクはまばら) ---
-  const rngOut = seededRandom(Math.max(1, Math.floor(seed) + 113));
-  const Nout = Math.floor((14 + baseR * 0.28) * density);
-  for (let i = 0; i < Nout; i++) {
-    const a = (Math.PI * 2 * i) / Nout + (rngOut() - 0.5) * 0.3;
-    const spike = rngOut() < spikeChance;
-    // 非スパイクは baseR 近くでほぼ均一、スパイクだけ伸ばす
-    const len = baseR * (spike
-      ? (spikeLen + rngOut() * lenVar * 0.25)
-      : (0.92 + rngOut() * lenVar * 0.15));
-    const bend = (rngOut() * 2 - 1) * len * 0.22 * jitter;
-    const alpha = spike ? (0.75 + rngOut() * 0.2) : (0.55 + rngOut() * 0.35);
-    const wBase = spike ? (2.6 + rngOut() * 1.4) : (1.8 + rngOut() * 1.0);
-    const wTip = 0.45 + rngOut() * 0.35;
-    strokeTaperedRadial(ctx, cx, cy, a, len, bend, spike ? strokeDark : col, alpha, wBase, wTip);
+  // ==== (D) 外周の小葉(ジャギー縁) ====
+  const rngEdge = seededRandom(Math.max(1, Math.floor(seed) + 211));
+  const Nedge = Math.floor((22 + baseR * 0.45) * (0.5 + foliage * 1.3));
+  const edges = [];
+  for (let i = 0; i < Nedge; i++) {
+    const a = (Math.PI * 2 * i) / Nedge + (rngEdge() - 0.5) * 0.35;
+    const spike = rngEdge() < spikeChance;
+    const r_base = baseR * (spike
+      ? (spikeLen + rngEdge() * lenVar * 0.2)
+      : (0.90 + rngEdge() * lenVar * 0.12));
+    edges.push({
+      x: cx + Math.cos(a) * r_base,
+      y: cy + Math.sin(a) * r_base,
+      r: spike ? (4 + rngEdge() * 5) : (2.6 + rngEdge() * 3.5),
+      dark: spike,
+    });
   }
+  // 明るい葉色
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  for (const e of edges) { if (e.dark) continue; ctx.moveTo(e.x + e.r, e.y); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); }
+  ctx.fill();
+  // スパイク=暗色アクセント
+  ctx.fillStyle = strokeDark;
+  ctx.globalAlpha = 0.7;
+  ctx.beginPath();
+  for (const e of edges) { if (!e.dark) continue; ctx.moveTo(e.x + e.r, e.y); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); }
+  ctx.fill();
   ctx.globalAlpha = 1;
 
   // 中心アンカー
   ctx.fillStyle = strokeDark;
   ctx.globalAlpha = 0.85;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(2, baseR * 0.15), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(2, baseR * 0.13), 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
