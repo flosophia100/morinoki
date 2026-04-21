@@ -531,10 +531,7 @@ function ownTreeHTML(tree, state = {}) {
       </div>
     </details>
     <div class="ip-block">
-      <button data-action="toggle-hide-self" class="btn-secondary w-full">
-        ${state.hideSelfTree ? '自分の樹を表示する' : '自分の樹を一時非表示'}
-      </button>
-      <button data-action="logout" class="btn-secondary w-full" style="margin-top:0.4rem">ログアウト</button>
+      <button data-action="logout" class="btn-secondary w-full">ログアウト</button>
     </div>
   `;
 }
@@ -553,7 +550,6 @@ function kwItemHTML(tree, node) {
 }
 function wireOwnTree(el, state, tree, cb) {
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
-  el.querySelector('[data-action="toggle-hide-self"]')?.addEventListener('click', () => cb.onToggleHideSelf && cb.onToggleHideSelf());
 
   // 合言葉変更(メール認証経由)
   const crPassBtn = el.querySelector('#cr-pass-save');
@@ -744,7 +740,9 @@ function wireOtherTree(el, state, tree, cb) {
 
 // ----- 自分のノード(編集) -----
 function ownNodeHTML(tree, node) {
-  const subs = (tree.nodes || []).filter(n => n.parent_id === node.id).sort((a,b) => (a.ord||0) - (b.ord||0));
+  // 現在の色がパレットに無ければ先頭に加える(admin が編集している他樹のノードで
+  // 旧パレット色が残っている場合でも「選択中」が正しく表示されるよう)
+  const palette = PALETTE.includes(node.color) ? PALETTE : [node.color, ...PALETTE];
   return `
     <div class="ip-block">
       <p class="ip-back-link"><button data-action="back" class="btn-link">← ${escapeHtml(tree.name)}の樹</button></p>
@@ -755,13 +753,9 @@ function ownNodeHTML(tree, node) {
     <div class="ip-block">
       <label class="mini-label">キーワード</label>
       <input id="nf-text" type="text" maxlength="20" value="${escapeHtml(node.text)}">
-      <label class="mini-label">サイズ</label>
-      <div class="size-row" id="nf-size">
-        ${[1,2,3,4,5].map(sz => `<button data-size="${sz}" class="${sz===node.size?'on':''}">${['XS','S','M','L','XL'][sz-1]}</button>`).join('')}
-      </div>
       <label class="mini-label">色</label>
       <div class="color-row" id="nf-color">
-        ${PALETTE.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
+        ${palette.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
       </div>
       <label class="mini-label">説明(任意・300字)</label>
       <textarea id="nf-desc" maxlength="300" rows="4">${escapeHtml(node.description || '')}</textarea>
@@ -770,23 +764,10 @@ function ownNodeHTML(tree, node) {
         <button id="nf-save" class="btn-primary">保存</button>
       </div>
     </div>
-    <div class="ip-block">
-      <label class="mini-label">子のキーワード(孫ノード)</label>
-      <div class="ip-row">
-        <input id="nf-sub-input" type="text" maxlength="20" placeholder="例: ジャズ">
-        <button id="nf-sub-btn" class="btn-sm btn-ink">＋</button>
-      </div>
-      ${subs.length ? `<ul class="ip-sub-list">${subs.map(s => `<li data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}</li>`).join('')}</ul>` : ''}
-    </div>
   `;
 }
 function wireOwnNode(el, state, tree, node, cb) {
   el.querySelector('[data-action="back"]')?.addEventListener('click', () => cb.onSelectTree && cb.onSelectTree(tree));
-  // size buttons
-  el.querySelectorAll('#nf-size button').forEach(b => b.addEventListener('click', () => {
-    el.querySelectorAll('#nf-size button').forEach(x => x.classList.remove('on'));
-    b.classList.add('on');
-  }));
   el.querySelectorAll('#nf-color button').forEach(b => b.addEventListener('click', () => {
     el.querySelectorAll('#nf-color button').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
@@ -795,12 +776,11 @@ function wireOwnNode(el, state, tree, node, cb) {
   el.querySelector('#nf-save').addEventListener('click', async () => {
     const newText = el.querySelector('#nf-text').value.trim();
     if (!newText) return;
-    const newSize = Number(el.querySelector('#nf-size .on')?.dataset.size || node.size);
     const newColor = el.querySelector('#nf-color .on')?.dataset.color || node.color;
     const newDesc = el.querySelector('#nf-desc').value.trim() || null;
     try {
       const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
-        id: node.id, text: newText, size: newSize, color: newColor,
+        id: node.id, text: newText, size: node.size, color: newColor,
         ord: node.ord, description: newDesc
       });
       Object.assign(node, saved);
@@ -809,34 +789,15 @@ function wireOwnNode(el, state, tree, node, cb) {
   });
 
   el.querySelector('#nf-delete').addEventListener('click', async () => {
-    if (!confirm('このキーワード(と孫)を削除しますか?')) return;
+    if (!confirm('このキーワードを削除しますか?')) return;
     try {
       await api.deleteNode((state.adminToken || state.session?.editToken), node.id);
-      // 自分自身とsubを配列からも除去
       const victims = new Set([node.id]);
       (tree.nodes || []).forEach(n => { if (victims.has(n.parent_id)) victims.add(n.id); });
       tree.nodes = tree.nodes.filter(n => !victims.has(n.id));
-      cb.onSelectTree && cb.onSelectTree(tree); // 親に戻る
+      cb.onSelectTree && cb.onSelectTree(tree);
     } catch (e) { import('./toast.js').then(m => m.showError(e, '削除失敗')); }
   });
-
-  // 子ノード(孫)追加
-  async function addSub() {
-    const input = el.querySelector('#nf-sub-input');
-    const txt = input.value.trim();
-    if (!txt) return;
-    try {
-      const saved = await api.upsertNode((state.adminToken || state.session?.editToken), tree.id, {
-        text: txt, size: 2, color: node.color, ord: (tree.nodes || []).filter(n => n.parent_id === node.id).length,
-        parent_id: node.id
-      });
-      tree.nodes.push(saved);
-      input.value = '';
-      cb.onRerender && cb.onRerender();
-    } catch (e) { import('./toast.js').then(m => m.showError(e, '保存失敗')); }
-  }
-  el.querySelector('#nf-sub-btn')?.addEventListener('click', addSub);
-  el.querySelector('#nf-sub-input')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSub(); });
 
   el.querySelectorAll('.ip-sub-list li').forEach(li => {
     li.addEventListener('click', () => {

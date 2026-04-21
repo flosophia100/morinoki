@@ -58,15 +58,12 @@ async function initRoom() {
     design: mergeDesign(null),
     ambience: mergeAmbience(null),
     hideAllTrees: false,   // 管理者用(ローカル)
-    hideSelfTree: false,   // ユーザー用(ローカル)
     // セッションごとに変わる乱数シード。layoutRandom が x=y=0 の樹を
     // ばらまくときに使う(=開くたびに配置が変わる)
     sessionSeed: Math.floor(Math.random() * 2147483647) + 1,
   };
   const HIDE_ALL_KEY  = 'mori.hideAll.'  + slug;
-  const HIDE_SELF_KEY = 'mori.hideSelf.' + slug;
   state.hideAllTrees  = localStorage.getItem(HIDE_ALL_KEY)  === '1';
-  state.hideSelfTree  = localStorage.getItem(HIDE_SELF_KEY) === '1';
   // グローバル管理者トークンを復元(/admin5002 でログインしてれば有効)
   const ADMIN_KEY = 'mori.admin.global.token';
   const savedAdmin = localStorage.getItem(ADMIN_KEY);
@@ -299,11 +296,6 @@ async function initRoom() {
     onToggleHideAll: () => {
       state.hideAllTrees = !state.hideAllTrees;
       localStorage.setItem(HIDE_ALL_KEY, state.hideAllTrees ? '1' : '0');
-      updatePanel(); forest.render();
-    },
-    onToggleHideSelf: () => {
-      state.hideSelfTree = !state.hideSelfTree;
-      localStorage.setItem(HIDE_SELF_KEY, state.hideSelfTree ? '1' : '0');
       updatePanel(); forest.render();
     },
     // 管理者: 背景・ギミック

@@ -314,7 +314,6 @@ export function createForest(canvas, state) {
         const ct = Date.parse(t.created_at || 0);
         if (ct > cursor) return;
       }
-      if (state.hideSelfTree && t.id === state.selfTreeId) return;
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
       if (dx < worldLeft - MARGIN || dx > worldRight + MARGIN ||
