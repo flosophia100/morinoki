@@ -18,9 +18,8 @@ export const DEFAULTS = {
   nodeShimmer: 0.4,     // ノード個別のゆらぎ(位置)
   nodePulseAmp: 0.4,    // ノードの伸縮・幅(0=同じ大きさ, 1=大きく伸縮)
   nodePulseSpeed: 0.4,  // ノードの伸縮・速さ
-  nodeDrift: 0.5,       // 葉ノードのバネ緩み+振れ幅(0=rest固定, 1=大きく漂う)
-  nodeSwayDepth: 0.6,   // 深い階層ほど揺れる倍率(0=均一, 1=葉先ほど大振り)
-  textAffinity: 0.4,    // 文言類似による引力(0=無効, 1=強く引き合う)
+  nodeDrift: 0.6,       // 葉ノードの漂い(0=rest固定, 1=大きく漂う)
+  nodeSwayDepth: 0.7,   // 深い階層ほど揺れる倍率(0=均一, 1=葉先ほど大振り)
 };
 
 // サーバから取得した design を DEFAULTS とマージ
@@ -102,5 +101,4 @@ export const META = [
   { key: 'nodePulseSpeed',  label: 'ノードの伸縮(速さ)' },
   { key: 'nodeDrift',       label: '葉ノードの漂い(範囲)' },
   { key: 'nodeSwayDepth',   label: '葉先ほど揺れる' },
-  { key: 'textAffinity',    label: '文言類似による引力' },
 ];
