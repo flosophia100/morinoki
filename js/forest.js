@@ -275,11 +275,16 @@ export function createForest(canvas, state) {
     const worldRight = worldLeft + W * invS;
     const worldBot = worldTop + H * invS;
     const MARGIN = 250; // 樹の半径+余裕
+    // 非表示モード
+    //  - 管理者が「全て非表示」ONなら樹を描かない
+    //  - ユーザーが「自分の樹を非表示」ONなら自分の樹だけスキップ
+    if (state.hideAllTrees) { ctx.restore(); critters.render(ctx); return; }
     (state.trees || []).forEach(t => {
       if (cursor) {
         const ct = Date.parse(t.created_at || 0);
         if (ct > cursor) return;
       }
+      if (state.hideSelfTree && t.id === state.selfTreeId) return;
       const dx = t._displayX ?? t.x;
       const dy = t._displayY ?? t.y;
       // 視界外はスキップ(パフォーマンス)

@@ -32,14 +32,12 @@ export function exportForestCsv(state) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// ノード色パレット: 北欧ベース + パステル + アクセント(3行 × 5列 = 15色)
-// Row1: Nordic earth(セージ・フィヨルド・アンバー・テラコッタ・砂)
-// Row2: Pastel(淡黄・桃・紫・水色・ミント)
-// Row3: 濃色・冷色アクセント(深セージ・藍・珊瑚・ラベンダー・スレート)
+// ノード色パレット: パステル10色(緑系5種 + 桜・黄・白・紅・紫)
+// 緑系: 若草 / 抹茶 / 苔 / ミント / 青緑
+// 他:  桜 / 黄 / 白 / 紅 / 紫
 const PALETTE = [
-  '#6f8a7d','#7d98a8','#c89566','#b0624a','#b09d84',
-  '#f4e6a0','#f4b4c4','#d0b0e0','#a0c8e0','#b8e0cc',
-  '#435e52','#4a6b85','#e08870','#a888c0','#8ea0a8',
+  '#c9dca8','#a8c19a','#8ab0a0','#b8e0cc','#9dc4c0',
+  '#f4cfd6','#f4ecb0','#f2ece0','#ecaaa6','#cdb4dc',
 ];
 
 // ===== 左常駐パネル =====
@@ -62,7 +60,7 @@ export function renderInfoPanel(state, selection, callbacks) {
   }
   if (selection.kind === 'tree') {
     if (isSelfTree(selection.tree)) {
-      el.innerHTML = ownTreeHTML(selection.tree);
+      el.innerHTML = ownTreeHTML(selection.tree, state);
       wireOwnTree(el, state, selection.tree, callbacks);
     } else {
       el.innerHTML = otherTreeHTML(selection.tree, state);
@@ -269,6 +267,13 @@ function adminAmbienceTab(state) {
 
 function adminToolsTab(state) {
   return `
+    <div class="ip-block">
+      <label class="mini-label">表示</label>
+      <button data-action="toggle-hide-all" class="btn-secondary w-full">
+        ${state.hideAllTrees ? 'すべての樹を表示する' : 'すべての樹を一時非表示'}
+      </button>
+      <p class="ip-hint" style="font-size:0.74rem;margin-top:0.3rem">このブラウザのみに効く一時的な表示切替(他ユーザーには影響しません)</p>
+    </div>
     <div class="ip-block">
       <label class="mini-label">ツール</label>
       ${(state.trees || []).length > 0 ? `
@@ -480,7 +485,7 @@ function wireIdle(el, state, cb) {
 }
 
 // ----- 自分の樹(幹タップ) -----
-function ownTreeHTML(tree) {
+function ownTreeHTML(tree, state = {}) {
   const topLevel = (tree.nodes || []).filter(n => !n.parent_id).sort((a,b) => (a.ord||0) - (b.ord||0));
   const email = tree.recovery_email || '';
   return `
@@ -522,7 +527,10 @@ function ownTreeHTML(tree) {
       </div>
     </details>
     <div class="ip-block">
-      <button data-action="logout" class="btn-secondary w-full">ログアウト</button>
+      <button data-action="toggle-hide-self" class="btn-secondary w-full">
+        ${state.hideSelfTree ? '自分の樹を表示する' : '自分の樹を一時非表示'}
+      </button>
+      <button data-action="logout" class="btn-secondary w-full" style="margin-top:0.4rem">ログアウト</button>
     </div>
   `;
 }
@@ -541,6 +549,7 @@ function kwItemHTML(tree, node) {
 }
 function wireOwnTree(el, state, tree, cb) {
   el.querySelector('[data-action="logout"]')?.addEventListener('click', () => cb.onLogout && cb.onLogout());
+  el.querySelector('[data-action="toggle-hide-self"]')?.addEventListener('click', () => cb.onToggleHideSelf && cb.onToggleHideSelf());
 
   // 合言葉変更(メール認証経由)
   const crPassBtn = el.querySelector('#cr-pass-save');
