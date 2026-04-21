@@ -148,11 +148,19 @@ export function drawRadialBurst(ctx, cx, cy, baseR, seed, col, strokeCol, opts =
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // 中心アンカー
-  ctx.fillStyle = strokeDark;
-  ctx.globalAlpha = 0.85;
+  // 中心のソリッド色円 — 左パネルのカラードットと視覚的に一致させる
+  //   これがあることで、アトモスフィア背景とのアルファ合成で暗く見える問題を解消
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
-  ctx.arc(cx, cy, Math.max(2, baseR * 0.13), 0, Math.PI * 2);
+  ctx.arc(cx, cy, Math.max(3, baseR * 0.38), 0, Math.PI * 2);
+  ctx.fill();
+
+  // 中心アンカー(ほんの小さな陰)
+  ctx.fillStyle = strokeDark;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, Math.max(1.5, baseR * 0.09), 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
