@@ -168,6 +168,13 @@ body.panel-hidden .forest-container { inset: 0; }
 .ip-near-list .sim-hint { margin-left: auto; color: var(--ink-soft); font-size: 0.75rem; }
 .forest-name { font-size: 1.1rem; color: var(--moss-deep); letter-spacing: 0.2em; }
 .forest-count { font-family: 'Klee One', serif; font-size: 0.78rem; color: var(--ink-soft); }
+.room-clock {
+  font-family: 'Klee One', serif;
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
 /* plant-btn removed */
 .ip-auth-form input[type="text"],
 .ip-auth-form input[type="password"],

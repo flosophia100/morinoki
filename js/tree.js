@@ -311,8 +311,33 @@ export function trunkRadiusFor(tree, scale = 1.0, design = DESIGN_DEFAULTS) {
 }
 
 // 幹の色を isSelf で返す(新規ノードの初期色にも使う)
+//   自分の幹: 緑(#5a9b6e)
+//   他人の幹: 中性セージ(#6f8a7d)
 export function trunkColorFor(isSelf) {
-  return isSelf ? '#c89566' : '#6f8a7d';
+  return isSelf ? '#5a9b6e' : '#6f8a7d';
+}
+
+// hex → rgba 文字列。外縁の発光リング生成に使う。
+function hexToRgba(hex, alpha) {
+  let h = (hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// 発光リング(外縁を光らせる)
+//   3層の同心円をアルファ弱めで重ねる。n._r または trunkR の外側に広がる。
+export function drawGlow(ctx, cx, cy, baseR, color) {
+  ctx.save();
+  for (let i = 3; i >= 1; i--) {
+    ctx.fillStyle = hexToRgba(color, 0.1 * i);
+    ctx.beginPath();
+    ctx.arc(cx, cy, baseR + 5 * i, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
@@ -324,16 +349,20 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   // design.branchThickness (0..1) → 0.5..1.6 倍
   const branchMul = 0.5 + design.branchThickness * 1.1;
 
-  // 自分の樹の光の輪(背後)
+  // 自分の幹は緑の発光リング(背後)
   if (isSelf) {
+    const glowCol = '#5a9b6e';
     for (let i = 3; i >= 1; i--) {
       ctx.save();
-      ctx.fillStyle = `rgba(196, 154, 62, ${0.06 * i})`;
+      const r = 90 + (i - 1) * 0;  // 色は固定、アルファだけ変える
+      void r;
+      ctx.fillStyle = `rgba(90, 155, 110, ${0.10 * i})`;
       ctx.beginPath();
       ctx.arc(cx, cy, trunkR + 14 * i, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
+    void glowCol;
   }
 
   // 枝(蛇行する曲線)
@@ -350,12 +379,14 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     );
   });
 
-  // 葉ノード(放射状バースト、呼吸のように伸縮)
+  // 葉ノード(放射状バースト + 外縁の発光)
   positions.forEach(p => {
     const n = p.node;
     const nSeed = stringHash(n.id || n.text || 'node');
     const col = n.color || '#6f8a7d';
     const strokeCol = darken(col, 0.4);
+    // 外縁の発光リング(自分の幹と同様に光らせる)
+    drawGlow(ctx, p.x, p.y, p.nr, col);
     drawRadialBurst(ctx, p.x, p.y, p.nr, nSeed, col, strokeCol, {
       densityMul: 1.1, design
     });
@@ -369,9 +400,9 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.restore();
     }
 
-    // 枝ノードのラベル色は幹と揃える(自分=明るい背景+濃い文字、他人=暗い背景+淡い文字)
-    const labelBg = isSelf ? 'rgba(255, 248, 220, 0.82)' : 'rgba(31, 26, 21, 0.6)';
-    const labelFg = isSelf ? '#3a2d0a' : '#f4ede0';
+    // 枝ノードのラベル色は幹と揃える
+    const labelBg = isSelf ? 'rgba(234, 248, 228, 0.85)' : 'rgba(31, 26, 21, 0.6)';
+    const labelFg = isSelf ? '#14351f' : '#f4ede0';
     if (p.nr >= 20 * scale) {
       ctx.save();
       ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
@@ -405,9 +436,9 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   });
 
   // ====== 幹(大きな放射状バースト + 名前) ======
-  // 自分: 温かいアンバー / 他人: 冷たいフィヨルドセージ
-  const trunkCol = isSelf ? '#c89566' : '#6f8a7d';
-  const trunkStroke = isSelf ? '#8e6440' : '#435e52';
+  // 自分: 緑 / 他人: 冷たいフィヨルドセージ
+  const trunkCol = isSelf ? '#5a9b6e' : '#6f8a7d';
+  const trunkStroke = isSelf ? '#2e5a3a' : '#435e52';
   drawRadialBurst(ctx, cx, cy, trunkR, seed * 7, trunkCol, trunkStroke, {
     densityMul: 1.3, design
   });
@@ -417,7 +448,6 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const name = tree.name || '';
-  // 幹名は少し大きめに(0.32→0.42、最低 16*scale)
   let fs = Math.max(16 * scale, trunkR * 0.42);
   ctx.font = `${fs}px 'Shippori Mincho', serif`;
   while (ctx.measureText(name).width > trunkR * 1.35 && fs > 12 * scale) {
@@ -425,9 +455,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     ctx.font = `${fs}px 'Shippori Mincho', serif`;
   }
   const tw = ctx.measureText(name).width;
-  ctx.fillStyle = isSelf ? 'rgba(255, 248, 220, 0.82)' : 'rgba(31, 26, 21, 0.6)';
+  // ラベルは自分=ダーク文字+明るい背景、他人=淡い文字+暗い背景
+  ctx.fillStyle = isSelf ? 'rgba(234, 248, 228, 0.85)' : 'rgba(31, 26, 21, 0.6)';
   ctx.fillRect(cx - tw/2 - 8, cy - fs/2 - 4, tw + 16, fs + 8);
-  ctx.fillStyle = isSelf ? '#3a2d0a' : '#f4ede0';
+  ctx.fillStyle = isSelf ? '#14351f' : '#f4ede0';
   ctx.fillText(name, cx, cy);
   ctx.restore();
 

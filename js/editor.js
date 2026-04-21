@@ -35,13 +35,13 @@ export function exportForestCsv(state) {
 // ノード色パレット: パステル10色(緑系5種 + 桜・黄・白・紅・紫)
 // 緑系: 若草 / 抹茶 / 苔 / ミント / 青緑
 // 他:  桜 / 黄 / 白 / 紅 / 紫
-// パレット先頭2つは幹色(#c89566 = 自分の幹、#6f8a7d = 他人の幹)。
-// 新規ノードの初期色は trunkColorFor(isSelf) で決まり、この2色のいずれかになるので
-// パレット内で正しく選択状態として表示される。
+// パレット 10色。先頭2つは幹色(#5a9b6e=自分の幹の緑、#6f8a7d=他人の幹)。
+// 新規ノードのデフォルト色は trunkColorFor(isSelf) でパレット先頭と一致する。
+// 水色(#9dc4c0)・紅(#ecaaa6)は削除済み。
 const PALETTE = [
-  '#c89566','#6f8a7d',
-  '#c9dca8','#a8c19a','#8ab0a0','#b8e0cc','#9dc4c0',
-  '#f4cfd6','#f4ecb0','#f2ece0','#ecaaa6','#cdb4dc',
+  '#5a9b6e','#6f8a7d',
+  '#c9dca8','#a8c19a','#8ab0a0','#b8e0cc',
+  '#f4ecb0','#f2ece0','#f4cfd6','#cdb4dc',
 ];
 
 // ===== 左常駐パネル =====
@@ -95,10 +95,12 @@ function idleHTML(state) {
     ${isAdmin ? adminPanelHTML(state) : ''}
     ${!isAdmin ? `
       <div class="ip-block ip-auth-form">
-        <div class="auth-tabs">
-          <button data-auth-tab="login" class="auth-tab ${tab==='login'?'on':''}">ログイン</button>
-          <button data-auth-tab="new" class="auth-tab ${tab==='new'?'on':''}">新しく植える</button>
-        </div>
+        ${tab !== 'reset' ? `
+          <div class="auth-tabs">
+            <button data-auth-tab="login" class="auth-tab ${tab==='login'?'on':''}">ログイン</button>
+            <button data-auth-tab="new" class="auth-tab ${tab==='new'?'on':''}">新規作成</button>
+          </div>
+        ` : ''}
         ${tab === 'login' ? `
           <p class="ip-desc" style="margin-bottom:0.4rem">前に登録した名前と合言葉で入ります。</p>
           <label class="mini-label">名前</label>
@@ -107,11 +109,18 @@ function idleHTML(state) {
           <input id="auth-pass" type="password" minlength="4" maxlength="40" autocomplete="off" placeholder="合言葉">
           <button data-action="auth-login" class="btn-primary w-full" style="margin-top:0.6rem">ログイン</button>
           <p class="ip-hint" style="font-size:0.74rem;margin-top:0.5rem">
-            合言葉を忘れた方は
-            <button data-action="forgot-pass" class="btn-link">メールで再設定</button>
-            (メール登録済みの方)
+            <button data-auth-tab="reset" class="btn-link">合言葉の再設定</button>
           </p>
           <p id="auth-error" class="error hidden"></p>
+        ` : tab === 'reset' ? `
+          <p class="ip-title" style="font-size:1rem;margin-bottom:0.4rem">合言葉の再設定</p>
+          <p class="ip-desc" style="margin-bottom:0.6rem">登録した名前を入力すると、メールに再設定用の一時キーが届きます。</p>
+          <label class="mini-label">名前</label>
+          <input id="auth-reset-name" type="text" maxlength="20" placeholder="登録した名前" autocomplete="off">
+          <button data-action="auth-reset-send" class="btn-primary w-full" style="margin-top:0.6rem">メール送信</button>
+          <button data-auth-tab="login" class="btn-link w-full" style="margin-top:0.4rem">← ログイン画面に戻る</button>
+          <p id="auth-reset-msg" class="ip-hint hidden" style="font-size:0.8rem;margin-top:0.4rem;color:var(--moss-deep)"></p>
+          <p id="auth-reset-error" class="error hidden"></p>
         ` : `
           <p class="ip-desc" style="margin-bottom:0.4rem">この森に新しい樹を植えます。名前は後から変更できません。確認メールのリンクで本登録を完了します。</p>
           <label class="mini-label">名前</label>
@@ -470,13 +479,34 @@ function wireIdle(el, state, cb) {
     catch (e) { showErr(e.message || '登録できませんでした'); }
   });
 
-  el.querySelector('[data-action="forgot-pass"]')?.addEventListener('click', async () => {
-    err?.classList.add('hidden');
-    const nm = el.querySelector('#auth-name').value.trim();
-    if (!nm) return showErr('先に名前を入力してください');
+  // 合言葉再設定(別画面)からのメール送信
+  const resetBtn = el.querySelector('[data-action="auth-reset-send"]');
+  const resetMsg = el.querySelector('#auth-reset-msg');
+  const resetErr = el.querySelector('#auth-reset-error');
+  resetBtn?.addEventListener('click', async () => {
+    resetMsg?.classList.add('hidden');
+    resetErr?.classList.add('hidden');
+    const nm = el.querySelector('#auth-reset-name')?.value?.trim();
+    if (!nm) {
+      if (resetErr) { resetErr.textContent = '名前を入力してください'; resetErr.classList.remove('hidden'); }
+      return;
+    }
     if (!cb.onForgotPass) return;
-    try { await cb.onForgotPass({ name: nm }); }
-    catch (e) { showErr(e.message || 'メール送信できませんでした'); }
+    try {
+      const res = await cb.onForgotPass({ name: nm });
+      if (res?.nameNotFound) {
+        if (resetErr) { resetErr.textContent = 'その名前は登録されていません'; resetErr.classList.remove('hidden'); }
+      } else if (res?.noEmail) {
+        if (resetErr) { resetErr.textContent = 'この名前にはメールが登録されていません'; resetErr.classList.remove('hidden'); }
+      } else if (res?.sent) {
+        if (resetMsg) { resetMsg.textContent = '登録メール宛に再設定リンクを送りました'; resetMsg.classList.remove('hidden'); }
+      }
+    } catch (e) {
+      if (resetErr) { resetErr.textContent = e.message || 'メール送信できませんでした'; resetErr.classList.remove('hidden'); }
+    }
+  });
+  el.querySelector('#auth-reset-name')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') resetBtn?.click();
   });
 
   // Enterで送信(どちらのタブでも)
@@ -500,14 +530,14 @@ function ownTreeHTML(tree, state = {}) {
       </div>
     </div>
     <div class="ip-block">
-      <label class="mini-label">キーワードを増やす</label>
+      <label class="mini-label">マイワード(枝ノード)を登録</label>
       <div class="ip-row">
-        <input id="ip-add-input" type="text" maxlength="20" placeholder="例: 音楽">
+        <input id="ip-add-input" type="text" maxlength="20">
         <button id="ip-add-btn" class="btn-sm btn-ink">＋</button>
       </div>
     </div>
     <div class="ip-block ip-list">
-      <label class="mini-label">キーワード</label>
+      <label class="mini-label">マイワード(枝)</label>
       ${topLevel.length === 0
         ? '<p class="ip-hint">まだありません</p>'
         : `<ul class="ip-kw-list">${topLevel.map(n => kwItemHTML(tree, n)).join('')}</ul>`}
@@ -636,18 +666,18 @@ function otherTreeHTML(tree, state) {
       <p class="ip-back-link"><button data-action="to-self" class="btn-link">← 自分の樹へ</button></p>
       <div class="ip-head">
         <h2 class="ip-title">${escapeHtml(tree.name)} さん</h2>
-        <p class="ip-hint">${(tree.nodes||[]).length} 個のキーワード${dateStr}</p>
+        <p class="ip-hint">${(tree.nodes||[]).length} 個のマイワード(枝)${dateStr}</p>
       </div>
     </div>
     <div class="ip-block ip-list">
-      <label class="mini-label">キーワード</label>
+      <label class="mini-label">マイワード(枝)</label>
       ${topLevel.length === 0
         ? '<p class="ip-hint">まだありません</p>'
         : `<ul class="ip-kw-list">${topLevel.map(n => kwItemReadHTML(tree, n)).join('')}</ul>`}
     </div>
     ${common.length > 0 ? `
       <div class="ip-block">
-        <label class="mini-label">あなたとの共通キーワード</label>
+        <label class="mini-label">あなたとの共通マイワード(枝)</label>
         <div class="ip-common">${common.map(c => `<span class="common-chip">${escapeHtml(c.mine)}${c.theirs !== c.mine ? ` ⇄ ${escapeHtml(c.theirs)}` : ''}</span>`).join('')}</div>
       </div>
     ` : ''}
@@ -747,11 +777,11 @@ function ownNodeHTML(tree, node) {
     <div class="ip-block">
       <p class="ip-back-link"><button data-action="back" class="btn-link">← ${escapeHtml(tree.name)}の樹</button></p>
       <div class="ip-head">
-        <span class="self-badge">自分のキーワード</span>
+        <span class="self-badge">自分のマイワード(枝)</span>
       </div>
     </div>
     <div class="ip-block">
-      <label class="mini-label">キーワード</label>
+      <label class="mini-label">マイワード(枝)</label>
       <input id="nf-text" type="text" maxlength="20" value="${escapeHtml(node.text)}">
       <label class="mini-label">色</label>
       <div class="color-row" id="nf-color">
@@ -789,7 +819,7 @@ function wireOwnNode(el, state, tree, node, cb) {
   });
 
   el.querySelector('#nf-delete').addEventListener('click', async () => {
-    if (!confirm('このキーワードを削除しますか?')) return;
+    if (!confirm('このマイワード(枝)を削除しますか?')) return;
     try {
       await api.deleteNode((state.adminToken || state.session?.editToken), node.id);
       const victims = new Set([node.id]);
@@ -815,7 +845,7 @@ function otherNodeHTML(tree, node) {
     <div class="ip-block">
       <p class="ip-back-link"><button data-action="back" class="btn-link">← ${escapeHtml(tree.name)}さんの樹</button></p>
       <div class="ip-head">
-        <p class="ip-hint">${escapeHtml(tree.name)} さんのキーワード</p>
+        <p class="ip-hint">${escapeHtml(tree.name)} さんのマイワード(枝)</p>
         <div class="ip-kw-head">
           <span class="dot-lg" style="background:${node.color}"></span>
           <h2 class="ip-title">${escapeHtml(node.text)}</h2>
@@ -825,7 +855,7 @@ function otherNodeHTML(tree, node) {
     ${node.description ? `<div class="ip-block"><div class="ip-desc-box">${escapeHtml(node.description)}</div></div>` : '<div class="ip-block"><p class="ip-hint">(説明なし)</p></div>'}
     ${subs.length ? `
       <div class="ip-block">
-        <label class="mini-label">関連するキーワード</label>
+        <label class="mini-label">関連するマイワード(枝)</label>
         <ul class="ip-sub-list">${subs.map(s => `<li data-node-id="${s.id}"><span class="dot-sm" style="background:${s.color}"></span>${escapeHtml(s.text)}${s.description ? '<span class="desc-mark">…</span>' : ''}</li>`).join('')}</ul>
       </div>` : ''}
   `;

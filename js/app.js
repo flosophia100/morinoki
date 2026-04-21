@@ -160,6 +160,18 @@ async function initRoom() {
   document.getElementById('forest-name').textContent = roomLabel;
   document.title = `${roomLabel} — morinokki`;
 
+  // 画面右上のリアルタイム時計(HH:MM:SS)
+  const clockEl = document.getElementById('room-clock');
+  if (clockEl) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const updateClock = () => {
+      const d = new Date();
+      clockEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+    updateClock();
+    setInterval(updateClock, 1000);
+  }
+
   const sess = loadSession(slug);
   if (sess && !isTokenExpired(sess.editToken)) {
     state.session = sess; state.selfTreeId = sess.treeId;
@@ -249,8 +261,10 @@ async function initRoom() {
     },
     onForgotPass: async ({ name }) => {
       const res = await api.requestPasscodeReset(state.room.slug, name, location.origin);
-      if (res?.sent) showToast('登録メールに再設定リンクを送りました', 'success');
-      else showToast('この名前にはメールが登録されていません', 'error');
+      if (res?.sent) return { sent: true };
+      if (res?.reason === 'name_not_found') return { nameNotFound: true };
+      if (res?.reason === 'no_email') return { noEmail: true };
+      return {};
     },
     onRequestPasscodeChange: async (newPasscode) => {
       if (!state.session?.editToken) throw new Error('ログインが必要です');
