@@ -1,5 +1,6 @@
 import { stringHash } from './utils.js';
 import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './nodesim.js';
+import { bigrams, jaccardSim, normalize } from './textsim.js';
 
 // 軽量な「生きている森」シミュレータ
 // - 風: 各樹が独自の位相でゆっくりゆらぐ
@@ -192,29 +193,31 @@ export class LiveForest {
   }
 }
 
+// 樹の類似度: 各ノード text の bigram 集合をマージし、二樹間で Jaccard。
+// さらに「完全一致するノードが何割あるか」を小さく加算して語の重なりを効かせる。
 function treeSim(a, b) {
-  const ka = new Set((a.nodes || []).map(n => normalize(n.text)).filter(Boolean));
-  const kb = new Set((b.nodes || []).map(n => normalize(n.text)).filter(Boolean));
-  if (!ka.size || !kb.size) return 0;
-  let overlap = 0;
-  for (const x of ka) {
-    if (kb.has(x)) { overlap += 1; continue; }
-    for (const y of kb) {
-      if (x.length >= 2 && y.length >= 2 && (x.includes(y) || y.includes(x))) {
-        overlap += 0.5; break;
-      }
-      // 日本語: 共通文字の割合
-      const shared = charOverlap(x, y);
-      if (shared >= 0.5 && Math.min(x.length, y.length) >= 2) { overlap += 0.3; break; }
-    }
-  }
-  return overlap / Math.max(ka.size, kb.size);
-}
-function charOverlap(a, b) {
-  const sa = new Set(a), sb = new Set(b);
-  let n = 0; sa.forEach(c => { if (sb.has(c)) n++; });
-  return n / Math.max(sa.size, sb.size);
-}
-function normalize(s) {
-  return (s || '').toLowerCase().trim();
+  const na = normalize(a.name || '');
+  const nb = normalize(b.name || '');
+  // 名前が短すぎる場合はノードのみで判定、そうでなければ name も素材に加える
+  const aTexts = (a.nodes || []).map(n => n.text).filter(Boolean);
+  const bTexts = (b.nodes || []).map(n => n.text).filter(Boolean);
+  if (na) aTexts.push(a.name);
+  if (nb) bTexts.push(b.name);
+  if (aTexts.length === 0 || bTexts.length === 0) return 0;
+
+  // 1) 全bigrams の Jaccard
+  const A = new Set(), B = new Set();
+  aTexts.forEach(s => bigrams(s).forEach(g => A.add(g)));
+  bTexts.forEach(s => bigrams(s).forEach(g => B.add(g)));
+  const base = jaccardSim(A, B);
+
+  // 2) 完全一致ノード割合(ブースト)
+  const aNorm = new Set(aTexts.map(s => normalize(s)).filter(Boolean));
+  const bNorm = new Set(bTexts.map(s => normalize(s)).filter(Boolean));
+  let exact = 0;
+  aNorm.forEach(x => { if (bNorm.has(x)) exact++; });
+  const boost = exact / Math.max(aNorm.size, bNorm.size);
+
+  // 合成: base が主、exact で少しブースト(上限 1.0)
+  return Math.min(1, base + boost * 0.4);
 }

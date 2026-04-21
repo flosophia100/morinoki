@@ -218,11 +218,11 @@ function adminDesignTab(state) {
 }
 
 function adminShimmerTab(state) {
-  const keys = ['shimmerAmp','shimmerSpeed','nodeShimmer','nodePulseAmp','nodePulseSpeed'];
+  const keys = ['shimmerAmp','shimmerSpeed','nodeShimmer','nodePulseAmp','nodePulseSpeed','nodeDrift','nodeSwayDepth','textAffinity'];
   return `
     <div class="ip-block">
       <label class="mini-label">ゆらぎ</label>
-      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">幹はフィールドを漂い、ノードは伸縮して揺らぎます。</p>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">幹はフィールドを漂い、ノードは伸縮して揺らぎます。葉先ほど大きく揺れ、似た文言のノードは弱く引き合います。</p>
       ${DESIGN_META.filter(m => keys.includes(m.key)).map(m => {
         const v = state.design?.[m.key] ?? DESIGN_DEFAULTS[m.key];
         return `<div class="design-row">
