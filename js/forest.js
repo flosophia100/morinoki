@@ -114,22 +114,35 @@ export function createForest(canvas, state) {
     if (canEdit) {
       if (hit.type === 'trunk') {
         drag.mode = 'drag-tree';
-        drag.origX = hit.tree.x;
-        drag.origY = hit.tree.y;
-        hit.tree._dragging = true;
-        // driftを消してdragで位置を直接固定
+        // 表示位置(drift+wind 込み)を base にそのまま吸収し、drift/wind を 0 に
+        // これで mousedown 時の「ベース位置へのスナップ」を防ぐ
+        const dispX = hit.tree._displayX ?? hit.tree.x;
+        const dispY = hit.tree._displayY ?? hit.tree.y;
+        hit.tree.x = dispX;
+        hit.tree.y = dispY;
         hit.tree._driftX = 0;
         hit.tree._driftY = 0;
         hit.tree._windX = 0;
         hit.tree._windY = 0;
+        drag.origX = dispX;
+        drag.origY = dispY;
+        hit.tree._dragging = true;
       } else if (hit.type === 'node') {
         drag.mode = 'drag-node';
-        drag.origOffX = hit.node.offset_x != null
-          ? Number(hit.node.offset_x)
-          : (hit.node._x - (hit.node._parentX || hit.tree.x));
-        drag.origOffY = hit.node.offset_y != null
-          ? Number(hit.node.offset_y)
-          : (hit.node._y - (hit.node._parentY || hit.tree.y));
+        const n = hit.node;
+        // 現在の offset(未設定なら _x/_y から逆算)に simDX/Y を畳み込んで、
+        // sim をゼロに戻す。_dragging=true で nodesim はこのノードをスキップする
+        const curOffX = n.offset_x != null ? Number(n.offset_x)
+          : (n._x - (n._parentX || hit.tree.x));
+        const curOffY = n.offset_y != null ? Number(n.offset_y)
+          : (n._y - (n._parentY || hit.tree.y));
+        n.offset_x = curOffX + (n.simDX || 0);
+        n.offset_y = curOffY + (n.simDY || 0);
+        n.simDX = 0; n.simDY = 0;
+        n.vx = 0;    n.vy = 0;
+        n._dragging = true;
+        drag.origOffX = n.offset_x;
+        drag.origOffY = n.offset_y;
       }
     }
   }
@@ -166,6 +179,9 @@ export function createForest(canvas, state) {
 
     if (d.mode === 'drag-tree' && d.hit?.tree) {
       d.hit.tree._dragging = false;
+    }
+    if (d.mode === 'drag-node' && d.hit?.node) {
+      d.hit.node._dragging = false;
     }
     if (d.moved > 6) {
       if (d.mode === 'drag-tree' && state.onTreeMoved) state.onTreeMoved(d.hit.tree);
