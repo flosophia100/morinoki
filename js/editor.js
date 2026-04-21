@@ -1,7 +1,8 @@
 import { api } from './supabase.js';
 import { escapeHtml } from './utils.js';
 import { META as DESIGN_META, DEFAULTS as DESIGN_DEFAULTS,
-         AMBIENCE_DEFAULTS, TIME_CURVE_OPTIONS, SEASON_OPTIONS } from './designconfig.js';
+         AMBIENCE_DEFAULTS, TIME_CURVE_OPTIONS, SEASON_OPTIONS,
+         PALETTE_OPTIONS } from './designconfig.js';
 
 // ===== CSVエクスポート(主催者向け) =====
 export function exportForestCsv(state) {
@@ -31,8 +32,15 @@ export function exportForestCsv(state) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-// Nordic色調のパレット(fjord sage / slate blue / amber / terracotta / birch)
-const PALETTE = ['#6f8a7d','#7d98a8','#c89566','#b0624a','#9d8972','#435e52','#a7bcad','#e3c2b3','#8ea0a8','#b09d84'];
+// ノード色パレット: 北欧ベース + パステル + アクセント(3行 × 5列 = 15色)
+// Row1: Nordic earth(セージ・フィヨルド・アンバー・テラコッタ・砂)
+// Row2: Pastel(淡黄・桃・紫・水色・ミント)
+// Row3: 濃色・冷色アクセント(深セージ・藍・珊瑚・ラベンダー・スレート)
+const PALETTE = [
+  '#6f8a7d','#7d98a8','#c89566','#b0624a','#b09d84',
+  '#f4e6a0','#f4b4c4','#d0b0e0','#a0c8e0','#b8e0cc',
+  '#435e52','#4a6b85','#e08870','#a888c0','#8ea0a8',
+];
 
 // ===== 左常駐パネル =====
 // selection: null | { kind:'tree', tree } | { kind:'node', tree, node }
@@ -233,8 +241,12 @@ function adminAmbienceTab(state) {
   return `
     <div class="ip-block">
       <label class="mini-label">背景・ギミック</label>
-      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">時間帯・季節・鳥の頻度・背景森影の密度を調整。</p>
-      <label class="design-label">時間帯</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">背景テーマを選ぶと、朝・昼・夕・夜の色が実時間に合わせて推移します(時間帯=自動の場合)。</p>
+      <label class="design-label">背景テーマ</label>
+      <select data-ambience-key="palette" class="admin-select">
+        ${PALETTE_OPTIONS.map(o => `<option value="${o.value}" ${amb.palette===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
+      </select>
+      <label class="design-label" style="margin-top:0.5rem">時間帯</label>
       <select data-ambience-key="timeCurve" class="admin-select">
         ${TIME_CURVE_OPTIONS.map(o => `<option value="${o.value}" ${amb.timeCurve===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
       </select>

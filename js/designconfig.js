@@ -32,6 +32,7 @@ export function mergeDesign(raw) {
 
 // ---- ambience(背景・ギミック) ----
 export const AMBIENCE_DEFAULTS = {
+  palette: 'nordic',         // 'nordic' | 'sakura' | 'sunset' | 'pastel' | 'mono' | 'aurora'
   timeCurve: 'auto',         // 'auto' | 'dawn' | 'morning' | 'noon' | 'afternoon' | 'sunset' | 'dusk' | 'night'
   season: 'auto',            // 'auto' | 'spring' | 'summer' | 'autumn' | 'winter'
   birdFreq: 0.5,             // 0..1 (出現頻度倍率)
@@ -41,6 +42,7 @@ export const AMBIENCE_DEFAULTS = {
 export function mergeAmbience(raw) {
   const out = { ...AMBIENCE_DEFAULTS };
   if (raw && typeof raw === 'object') {
+    if (typeof raw.palette === 'string') out.palette = raw.palette;
     if (typeof raw.timeCurve === 'string') out.timeCurve = raw.timeCurve;
     if (typeof raw.season === 'string') out.season = raw.season;
     const bf = Number(raw.birdFreq); if (Number.isFinite(bf) && bf >= 0 && bf <= 1) out.birdFreq = bf;
@@ -48,6 +50,15 @@ export function mergeAmbience(raw) {
   }
   return out;
 }
+
+export const PALETTE_OPTIONS = [
+  { value: 'nordic',  label: '北欧(標準)' },
+  { value: 'sakura',  label: '桜' },
+  { value: 'sunset',  label: '夕焼け' },
+  { value: 'pastel',  label: 'パステル' },
+  { value: 'mono',    label: '墨(モノクロ)' },
+  { value: 'aurora',  label: 'オーロラ' },
+];
 
 export const TIME_CURVE_OPTIONS = [
   { value: 'auto',      label: '自動(現在時刻)' },

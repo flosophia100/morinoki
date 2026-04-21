@@ -442,7 +442,10 @@ async function initRoom() {
   });
 
   // 時間帯を1分ごとに更新(1時間/24段階でゆっくり推移)
-  setInterval(() => { state.atmo = atmosphereAt(); forest.render(); }, 60000);
+  setInterval(() => {
+    state.atmo = atmosphereAt(new Date(), state.ambience);
+    forest.render();
+  }, 60000);
 
   // ===== タイムラプス =====
   const tlBar = document.getElementById('timelapse-bar');

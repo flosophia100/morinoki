@@ -391,15 +391,16 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const name = tree.name || '';
-  let fs = Math.max(13 * scale, trunkR * 0.32);
+  // 幹名は少し大きめに(0.32→0.42、最低 16*scale)
+  let fs = Math.max(16 * scale, trunkR * 0.42);
   ctx.font = `${fs}px 'Shippori Mincho', serif`;
-  while (ctx.measureText(name).width > trunkR * 1.3 && fs > 10 * scale) {
+  while (ctx.measureText(name).width > trunkR * 1.35 && fs > 12 * scale) {
     fs -= 0.5;
     ctx.font = `${fs}px 'Shippori Mincho', serif`;
   }
   const tw = ctx.measureText(name).width;
   ctx.fillStyle = isSelf ? 'rgba(255, 248, 220, 0.82)' : 'rgba(31, 26, 21, 0.6)';
-  ctx.fillRect(cx - tw/2 - 6, cy - fs/2 - 3, tw + 12, fs + 6);
+  ctx.fillRect(cx - tw/2 - 8, cy - fs/2 - 4, tw + 16, fs + 8);
   ctx.fillStyle = isSelf ? '#3a2d0a' : '#f4ede0';
   ctx.fillText(name, cx, cy);
   ctx.restore();
