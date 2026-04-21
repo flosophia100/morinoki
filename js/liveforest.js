@@ -2,12 +2,23 @@ import { stringHash } from './utils.js';
 import { tickNodeSim, ripple as nodeRipple, impulseFor as nodeImpulse } from './nodesim.js';
 import { trunkRadiusFor } from './tree.js';
 
-// 最小構成の「生きている森」シミュレータ
-//   - 幹は低周波の sway を **直接代入** (_swayX/Y)。drift / 累積力なし
-//   - ドラッグ中は sway を更新せず「凍結」 → マウスに完全追従
-//   - 樹同士の斥力・中心引力も廃止(初期レイアウトで十分な間隔を確保)
+// 最小構成 + 持続的分離 (_sepX/_sepY)
 //
-// DB には保存しない、純粋な見た目の揺らぎ。
+//   _swayX = _rawX + _sepX
+//   _rawX  は純 sin/cos(毎フレーム計算、ドラッグ中は凍結)
+//   _sepX  は hard separation の累積(毎フレーム decay)
+//
+// ramp-in (fadeIn):初回1秒で sway 振幅を 0→1 にブレンドし、
+//   t=0 時の sin(phase)≠0 による初回ジャンプを防ぐ。
+
+const TRUNK_CFG = {
+  ITER: 2,
+  BUFFER: 1.10,
+  PUSH_CAP: 50,
+  SEP_DECAY: 0.977,   // node と揃える
+  SWAY_CAP: 400,      // 暴走ガード
+};
+
 export class LiveForest {
   constructor(getTrees, onTick, getDesign = null) {
     this.getTrees = getTrees;
@@ -57,54 +68,78 @@ export class LiveForest {
     this.t += 0.016 * speedMul;
     const ampMul = design ? (0.25 + design.shimmerAmp * 2.75) : 1.6;
     const trees = this.getTrees();
+    // 初回 1 秒で 0→1 に(= 初回ジャンプ防止)
+    const fadeIn = Math.min(1, this.t / 1.0);
 
-    // 幹の sway を直接代入。ドラッグ中は更新スキップ(凍結)
+    // 幹:raw sway と sep から合成
     trees.forEach(t => {
-      if (t._swayX == null) t._swayX = 0;
-      if (t._swayY == null) t._swayY = 0;
-      if (!t._dragging) {
-        const seed = typeof t.id === 'string' ? stringHash(t.id)
-                   : (Number(t.seed) || stringHash(t.name || 'x'));
-        const pX = (seed % 1009) * 0.01;
-        const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
-        const sx = (Math.sin(this.t * 0.09 + pX) * 110
-                  + Math.sin(this.t * 0.045 + pX * 1.7) * 55) * ampMul;
-        const sy = (Math.cos(this.t * 0.075 + pY) * 90
-                  + Math.cos(this.t * 0.038 + pY * 1.3) * 40) * ampMul;
-        t._swayX = sx;
-        t._swayY = sy;
+      if (t._sepX == null)  { t._sepX = 0;  t._sepY = 0; }
+      if (t._rawSwayX == null) { t._rawSwayX = 0; t._rawSwayY = 0; }
+      if (t._swayX == null) { t._swayX = 0; t._swayY = 0; }
+      if (t._dragging) {
+        // 完全凍結(raw/sep とも触らない)
+        t._swayX = (t._rawSwayX || 0) + (t._sepX || 0);
+        t._swayY = (t._rawSwayY || 0) + (t._sepY || 0);
+        return;
       }
+      const seed = typeof t.id === 'string' ? stringHash(t.id)
+                 : (Number(t.seed) || stringHash(t.name || 'x'));
+      const pX = (seed % 1009) * 0.01;
+      const pY = ((Math.floor(seed / 7)) % 1009) * 0.012;
+      const rawX = ((Math.sin(this.t * 0.09 + pX) * 110
+                  + Math.sin(this.t * 0.045 + pX * 1.7) * 55) * ampMul) * fadeIn;
+      const rawY = ((Math.cos(this.t * 0.075 + pY) * 90
+                  + Math.cos(this.t * 0.038 + pY * 1.3) * 40) * ampMul) * fadeIn;
+      t._rawSwayX = rawX; t._rawSwayY = rawY;
+      t._sepX *= TRUNK_CFG.SEP_DECAY;
+      t._sepY *= TRUNK_CFG.SEP_DECAY;
+      t._swayX = rawX + t._sepX;
+      t._swayY = rawY + t._sepY;
     });
 
-    // 幹同士の hard separation(2反復、_swayX/Y を直接補正)
-    //   rest(= t.x) + sway で表示位置を計算し、近すぎれば半々で押し離す
-    const TRUNK_ITER = 2;
-    const TRUNK_BUFFER = 1.1;   // 最小距離 = (ra + rb) * 1.1
-    const TRUNK_PUSH_CAP = 50;  // 1反復の最大補正
-    const design0 = design; // scope
-    for (let iter = 0; iter < TRUNK_ITER; iter++) {
+    // 幹同士 hard separation
+    for (let iter = 0; iter < TRUNK_CFG.ITER; iter++) {
       for (let i = 0; i < trees.length; i++) {
         const A = trees[i];
-        const ra = trunkRadiusFor(A, 1, design0 || undefined);
+        const ra = trunkRadiusFor(A, 1, design || undefined);
         const ax = A.x + (A._swayX || 0);
         const ay = A.y + (A._swayY || 0);
         for (let j = i + 1; j < trees.length; j++) {
           const B = trees[j];
-          const rb = trunkRadiusFor(B, 1, design0 || undefined);
-          const minD = (ra + rb) * TRUNK_BUFFER;
+          const rb = trunkRadiusFor(B, 1, design || undefined);
+          const minD = (ra + rb) * TRUNK_CFG.BUFFER;
           const bx = B.x + (B._swayX || 0);
           const by = B.y + (B._swayY || 0);
           const dx = bx - ax, dy = by - ay;
           const d2 = dx * dx + dy * dy;
           if (d2 >= minD * minD || d2 < 0.0001) continue;
           const d = Math.sqrt(d2);
-          const push = Math.min(TRUNK_PUSH_CAP, (minD - d) / 2);
+          const push = Math.min(TRUNK_CFG.PUSH_CAP, (minD - d) / 2);
           const ux = dx / d, uy = dy / d;
-          if (!A._dragging) { A._swayX -= ux * push; A._swayY -= uy * push; }
-          if (!B._dragging) { B._swayX += ux * push; B._swayY += uy * push; }
+          if (!A._dragging) {
+            A._sepX -= ux * push; A._sepY -= uy * push;
+            A._swayX -= ux * push; A._swayY -= uy * push;
+          }
+          if (!B._dragging) {
+            B._sepX += ux * push; B._sepY += uy * push;
+            B._swayX += ux * push; B._swayY += uy * push;
+          }
         }
       }
     }
+
+    // sway の絶対上限
+    trees.forEach(t => {
+      const cap = TRUNK_CFG.SWAY_CAP;
+      if (t._swayX >  cap) t._swayX =  cap;
+      if (t._swayX < -cap) t._swayX = -cap;
+      if (t._swayY >  cap) t._swayY =  cap;
+      if (t._swayY < -cap) t._swayY = -cap;
+      if (t._sepX  >  cap) t._sepX  =  cap;
+      if (t._sepX  < -cap) t._sepX  = -cap;
+      if (t._sepY  >  cap) t._sepY  =  cap;
+      if (t._sepY  < -cap) t._sepY  = -cap;
+    });
 
     // 成長アニメ + 表示位置の合成
     const now = this.now();
@@ -128,10 +163,10 @@ export class LiveForest {
       t._displayScale = t._spawnScale;
     });
 
-    tickNodeSim(trees, this.t, design);
+    // ノードシム(自身の fadeIn を渡す → ノードの初回ジャンプも防止)
+    tickNodeSim(trees, this.t, design, fadeIn);
   }
 
-  // ノード編集/作成時に呼ぶ(波紋+小さなインパルス)
   bumpNode(node, strength = 5) {
     const trees = this.getTrees();
     nodeImpulse(node, strength);

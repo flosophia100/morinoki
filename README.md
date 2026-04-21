@@ -195,26 +195,42 @@ depth≥1  : (25 + nodeDrift*75) * windMul * boost  葉 〜100px+
 windMul  = nodeShimmer * 2.0
 ```
 
-### 重なり防止(hard separation)
+### 重なり防止(hard separation) — 持続的分離方式
 
-ノード・幹の両方で同じアルゴリズム(最小距離を下回っていれば半々で押し離す、2反復)を適用する。
+単発の push だと sway の位相変化で方向が反転し、ワープ(フリッカ)する。
+そこで **分離量を累積する `_sepX/_sepY`** を導入する。
 
-**ノード** (`js/nodesim.js`): 位置は **`_restX + simDX`** を使う
-(`n._x` には前フレームの simDX が既に畳み込まれているため使うと二重加算になる)。
 ```
-minD  = (ra + rb) * 1.06         半径は n._r(描画半径)
-push  = min(40, (minD - d) / 2)  1反復の上限 40px
-simDX を ±push で直接上書き
+simDX   = raw_sway + _sepX            (ノード)
+_swayX  = raw_sway + _sepX            (幹)
 ```
 
-**幹** (`js/liveforest.js`): 位置は `tree.x + _swayX`、半径は `trunkRadiusFor()`。
-```
-minD  = (ra + rb) * 1.10         幹は余白を厚めに
-push  = min(50, (minD - d) / 2)  1反復の上限 50px
-_swayX を ±push で直接上書き
+- `raw_sway` は純 sin/cos(毎フレーム上書き、滑らかに変化)
+- `_sepX` は hard sep の結果が**累積**。毎フレーム `× 0.977`(半減期 ~30 frame)で decay
+- 重なりが続く間は sep が貯まり、解消すると戻る。向きが反転しても蓄積が吸収するためフリッカしない
+- ドラッグ中 (`_dragging`) は raw も sep も**凍結**
+
+**3種類の hard separation**(すべて半々 push、2反復)
+
+| 種類 | ファイル | 半径 | minD倍率 | push上限 |
+|---|---|---|---|---|
+| 幹 vs 幹 | `liveforest.js` | `trunkRadiusFor()` | × 1.10 | 50px |
+| 葉 vs 葉 | `nodesim.js` | `n._r` | × 1.06 | 40px |
+| 葉 vs 他樹の幹 | `nodesim.js` | `n._r` / `trunkRadiusFor()` | × 1.06 | 40px(葉のみ移動) |
+
+葉-自樹幹は角度配置で既に離れているため対象外。
+
+どれも DB 位置 (`tree.x/y`, `offset_x/y`) は触らない。`_sway / simDX` を介した視覚補正のみ。
+
+### 初回ジャンプ対策(fadeIn)
+
+```js
+fadeIn = min(1, this.t / 1.0);   // 1秒で 0→1
+raw_sway *= fadeIn;
 ```
 
-どちらも DB 位置 (`tree.x/y`, `offset_x/y`) は触らない。_sway / simDX を介した視覚補正のみ。
+`this.t = 0` の時点では `sin(phase)` が 0 にならないため、放っておくと最初のフレームで
+±最大振幅分ジャンプする。振幅を時間で ramp-in して回避。
 
 ### rest 位置の配置(兄弟重なり予防)
 
