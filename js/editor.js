@@ -185,6 +185,7 @@ function adminPanelHTML(state) {
   const tabs = [
     ['users',    'ユーザー'],
     ['trunks',   '幹'],
+    ['tips',     'お知らせ'],
     ['design',   'デザイン'],
     ['shimmer',  'ゆらぎ'],
     ['ambience', '背景'],
@@ -199,6 +200,7 @@ function adminPanelHTML(state) {
     </div>
     ${tab === 'users'    ? adminUsersTab(state)    : ''}
     ${tab === 'trunks'   ? adminTrunksTab(state)   : ''}
+    ${tab === 'tips'     ? adminTipsTab(state)     : ''}
     ${tab === 'design'   ? adminDesignTab(state)   : ''}
     ${tab === 'shimmer'  ? adminShimmerTab(state)  : ''}
     ${tab === 'ambience' ? adminAmbienceTab(state) : ''}
@@ -252,6 +254,117 @@ function adminTrunksTab(state) {
       <p id="admin-tree-error" class="error hidden" style="font-size:0.78rem"></p>
     </div>
   `;
+}
+
+// 管理者「お知らせ」タブ
+//   state.adminTips: [{id,title,body,enabled,created_at,updated_at,read_count,total_users}]
+//   state.adminTipsReads: {tipId: [{tree_name, read_at}]}
+function adminTipsTab(state) {
+  const tips = state.adminTips || [];
+  const loading = state.adminTipsLoading;
+  const readsMap = state.adminTipsReads || {};
+  return `
+    <div class="ip-block">
+      <label class="mini-label">新しいお知らせ(Tips)</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">ログイン済みの各ユーザーが次に画面を開いたとき、未読のお知らせが表示されます。</p>
+      <input id="tip-new-title" type="text" maxlength="60" placeholder="タイトル" style="margin-bottom:0.3rem">
+      <textarea id="tip-new-body" maxlength="2000" rows="3" placeholder="本文"></textarea>
+      <div class="ip-row" style="margin-top:0.3rem">
+        <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem">
+          <input id="tip-new-enabled" type="checkbox" checked> 有効
+        </label>
+        <button id="tip-create-btn" class="btn-sm btn-ink">＋追加</button>
+      </div>
+      <p id="tip-create-error" class="error hidden" style="font-size:0.78rem"></p>
+    </div>
+    <div class="ip-block">
+      <label class="mini-label">お知らせ一覧</label>
+      ${loading ? '<p class="ip-hint">読み込み中…</p>' : ''}
+      ${!loading && tips.length === 0 ? '<p class="ip-hint">まだありません</p>' : ''}
+      <ul class="ip-tips-list" style="list-style:none;padding:0;margin:0;">
+        ${tips.map(t => {
+          const reads = readsMap[t.id];
+          return `
+            <li class="ip-tip-item" data-tip-id="${t.id}" style="border:1px solid rgba(122,108,92,0.18);border-radius:0.4rem;padding:0.5rem;margin-bottom:0.4rem">
+              <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.2rem">
+                <strong style="flex:1">${escapeHtml(t.title)}</strong>
+                <span class="ip-hint" style="font-size:0.72rem">${t.read_count}/${t.total_users}読</span>
+                <label style="font-size:0.72rem;display:flex;gap:0.2rem;align-items:center">
+                  <input type="checkbox" data-tip-enabled="${t.id}" ${t.enabled ? 'checked' : ''}> 有効
+                </label>
+              </div>
+              <textarea data-tip-body="${t.id}" rows="3" maxlength="2000" style="font-size:0.82rem">${escapeHtml(t.body)}</textarea>
+              <input type="text" data-tip-title="${t.id}" maxlength="60" value="${escapeHtml(t.title)}" style="margin-top:0.3rem;font-size:0.82rem">
+              <div class="ip-row" style="margin-top:0.3rem">
+                <button class="btn-sm btn-secondary" data-tip-reads="${t.id}">${reads ? '閉じる' : '既読者'}</button>
+                <button class="btn-sm btn-secondary" data-tip-save="${t.id}">保存</button>
+                <button class="btn-sm btn-danger" data-tip-delete="${t.id}">削除</button>
+              </div>
+              ${reads ? `
+                <div style="margin-top:0.4rem;font-size:0.78rem">
+                  ${reads.length === 0 ? '<p class="ip-hint">まだ誰も読んでいません</p>' : `
+                    <ul style="list-style:none;padding:0;margin:0;max-height:10rem;overflow-y:auto">
+                      ${reads.map(r => `<li style="display:flex;justify-content:space-between;padding:0.15rem 0.2rem;border-bottom:1px dotted rgba(122,108,92,0.2)">
+                        <span>${escapeHtml(r.tree_name)}</span>
+                        <span class="ip-hint">${formatDateTime(r.read_at)}</span>
+                      </li>`).join('')}
+                    </ul>
+                  `}
+                </div>
+              ` : ''}
+            </li>
+          `;
+        }).join('')}
+      </ul>
+      <button data-action="admin-tips-refresh" class="btn-secondary w-full" style="margin-top:0.4rem">再読み込み</button>
+    </div>
+  `;
+}
+
+function formatDateTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '-';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 未読 Tips を1つのモーダルに連続して縦に並べて表示(閉じると全部既読化)
+export function showTipsStack(tips, markRead) {
+  if (!tips || !tips.length) return;
+  document.querySelectorAll('.morinokki-modal-overlay').forEach(x => x.remove());
+  const overlay = document.createElement('div');
+  overlay.className = 'morinokki-modal-overlay';
+  const bodyHtml = tips.map(t => `
+    <section class="morinokki-tip-item">
+      <h4 class="morinokki-tip-title">${escapeHtml(t.title)}</h4>
+      <div class="morinokki-tip-body">${escapeHtml(t.body).replace(/\n/g, '<br>')}</div>
+    </section>
+  `).join('');
+  overlay.innerHTML = `
+    <div class="morinokki-modal">
+      <button class="morinokki-modal-close" aria-label="閉じる">×</button>
+      <h3 class="morinokki-modal-title">お知らせ(${tips.length}件)</h3>
+      <div class="morinokki-modal-body morinokki-tips-stack">${bodyHtml}</div>
+      <div style="text-align:right;margin-top:0.6rem">
+        <button class="btn-primary morinokki-tip-ack">確認した</button>
+      </div>
+    </div>
+  `;
+  const closeAll = async () => {
+    if (typeof markRead === 'function') {
+      for (const t of tips) {
+        try { await markRead(t.id); } catch {}
+      }
+    }
+    overlay.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  const onKey = (e) => { if (e.key === 'Escape') closeAll(); };
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAll(); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(overlay);
+  overlay.querySelector('.morinokki-modal-close').addEventListener('click', closeAll);
+  overlay.querySelector('.morinokki-tip-ack').addEventListener('click', closeAll);
 }
 
 function adminDesignTab(state) {
@@ -359,13 +472,20 @@ function wireIdle(el, state, cb) {
   el.querySelectorAll('[data-admin-tab]').forEach(btn => {
     btn.addEventListener('click', async () => {
       state.adminTab = btn.dataset.adminTab;
-      // ユーザータブを開いたときだけ一覧をフェッチ
       if (state.adminTab === 'users' && cb.onAdminListUsers) {
         state.adminUsersLoading = true;
         cb.onRerender && cb.onRerender();
         try { state.adminUsers = await cb.onAdminListUsers(); }
         catch { state.adminUsers = []; }
         state.adminUsersLoading = false;
+      }
+      if (state.adminTab === 'tips' && cb.onAdminListTips) {
+        state.adminTipsLoading = true;
+        state.adminTipsReads = {};
+        cb.onRerender && cb.onRerender();
+        try { state.adminTips = await cb.onAdminListTips(); }
+        catch { state.adminTips = []; }
+        state.adminTipsLoading = false;
       }
       cb.onRerender && cb.onRerender();
     });
@@ -379,6 +499,80 @@ function wireIdle(el, state, cb) {
     state.adminUsers = await cb.onAdminListUsers();
     state.adminUsersLoading = false;
     cb.onRerender && cb.onRerender();
+  });
+
+  // ===== お知らせ(Tips)管理 =====
+  el.querySelector('[data-action="admin-tips-refresh"]')?.addEventListener('click', async () => {
+    if (!cb.onAdminListTips) return;
+    state.adminTipsLoading = true;
+    cb.onRerender && cb.onRerender();
+    state.adminTips = await cb.onAdminListTips();
+    state.adminTipsLoading = false;
+    cb.onRerender && cb.onRerender();
+  });
+  el.querySelector('#tip-create-btn')?.addEventListener('click', async () => {
+    const err = el.querySelector('#tip-create-error');
+    err?.classList.add('hidden');
+    const title = el.querySelector('#tip-new-title')?.value?.trim();
+    const body  = el.querySelector('#tip-new-body')?.value?.trim();
+    const enabled = el.querySelector('#tip-new-enabled')?.checked ?? true;
+    if (!title || !body) {
+      if (err) { err.textContent = 'タイトルと本文を入力してください'; err.classList.remove('hidden'); }
+      return;
+    }
+    if (!cb.onAdminCreateTip) return;
+    try {
+      await cb.onAdminCreateTip({ title, body, enabled });
+      state.adminTips = cb.onAdminListTips ? await cb.onAdminListTips() : state.adminTips;
+      cb.onRerender && cb.onRerender();
+    } catch (e) {
+      if (err) { err.textContent = '追加失敗: ' + (e.message || ''); err.classList.remove('hidden'); }
+    }
+  });
+  el.querySelectorAll('[data-tip-save]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const tipId = b.dataset.tipSave;
+      const title = el.querySelector(`[data-tip-title="${tipId}"]`)?.value?.trim();
+      const body  = el.querySelector(`[data-tip-body="${tipId}"]`)?.value?.trim();
+      const enabled = el.querySelector(`[data-tip-enabled="${tipId}"]`)?.checked ?? true;
+      if (!title || !body) return;
+      if (!cb.onAdminUpdateTip) return;
+      try {
+        await cb.onAdminUpdateTip({ tipId, title, body, enabled });
+        state.adminTips = cb.onAdminListTips ? await cb.onAdminListTips() : state.adminTips;
+        cb.onRerender && cb.onRerender();
+      } catch (e) {
+        import('./toast.js').then(m => m.showError(e, '保存失敗'));
+      }
+    });
+  });
+  el.querySelectorAll('[data-tip-delete]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const tipId = b.dataset.tipDelete;
+      if (!confirm('このお知らせを削除しますか?既読記録も消えます。')) return;
+      if (!cb.onAdminDeleteTip) return;
+      try {
+        await cb.onAdminDeleteTip(tipId);
+        state.adminTips = cb.onAdminListTips ? await cb.onAdminListTips() : state.adminTips;
+        if (state.adminTipsReads) delete state.adminTipsReads[tipId];
+        cb.onRerender && cb.onRerender();
+      } catch (e) {
+        import('./toast.js').then(m => m.showError(e, '削除失敗'));
+      }
+    });
+  });
+  el.querySelectorAll('[data-tip-reads]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const tipId = b.dataset.tipReads;
+      state.adminTipsReads = state.adminTipsReads || {};
+      if (state.adminTipsReads[tipId]) {
+        delete state.adminTipsReads[tipId];
+      } else if (cb.onAdminListTipReads) {
+        try { state.adminTipsReads[tipId] = await cb.onAdminListTipReads(tipId); }
+        catch { state.adminTipsReads[tipId] = []; }
+      }
+      cb.onRerender && cb.onRerender();
+    });
   });
   // 削除
   el.querySelectorAll('[data-action="admin-user-delete"]').forEach(b => {

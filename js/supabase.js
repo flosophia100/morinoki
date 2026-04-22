@@ -72,6 +72,22 @@ export const api = {
     rpc('request_tree_self_deletion', { p_edit_token: editToken, p_base_url: baseUrl || null }),
   verifyCredentialChange: (token) =>
     rpc('verify_credential_change', { p_token: token }),
+  // Tips: ユーザー側
+  listUnreadTips: (editToken, roomSlug, limit = 10) =>
+    rpc('list_unread_tips', { p_edit_token: editToken, p_room_slug: roomSlug, p_limit: limit }),
+  markTipRead: (editToken, tipId) =>
+    rpc('mark_tip_read', { p_edit_token: editToken, p_tip_id: tipId }),
+  // Tips: 管理者
+  adminListTips: (adminToken, roomSlug) =>
+    rpc('admin_list_tips', { p_admin_token: adminToken, p_room_slug: roomSlug }),
+  adminCreateTip: (adminToken, roomSlug, title, body, enabled = true) =>
+    rpc('admin_create_tip', { p_admin_token: adminToken, p_room_slug: roomSlug, p_title: title, p_body: body, p_enabled: enabled }),
+  adminUpdateTip: (adminToken, tipId, title, body, enabled) =>
+    rpc('admin_update_tip', { p_admin_token: adminToken, p_tip_id: tipId, p_title: title, p_body: body, p_enabled: enabled }),
+  adminDeleteTip: (adminToken, tipId) =>
+    rpc('admin_delete_tip', { p_admin_token: adminToken, p_tip_id: tipId }),
+  adminListTipReads: (adminToken, tipId) =>
+    rpc('admin_list_tip_reads', { p_admin_token: adminToken, p_tip_id: tipId }),
   adminListUsers: (adminToken, roomSlug) =>
     rpc('admin_list_users', { p_admin_token: adminToken, p_room_slug: roomSlug }),
   adminDeleteUser: (adminToken, treeId) =>

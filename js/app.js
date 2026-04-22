@@ -1,5 +1,6 @@
 import { api } from './supabase.js';
 import { mergeDesign, mergeAmbience } from './designconfig.js';
+import { fetchWeather, weatherLabel } from './weather.js';
 
 const isAdmin = document.body.classList.contains('page-admin');
 const isRoom = document.body.classList.contains('page-room');
@@ -61,6 +62,8 @@ async function initRoom() {
     // セッションごとに変わる乱数シード。layoutRandom が x=y=0 の樹を
     // ばらまくときに使う(=開くたびに配置が変わる)
     sessionSeed: Math.floor(Math.random() * 2147483647) + 1,
+    // 天気(岐阜県美濃市の現在)。null の間はエフェクトなし
+    weather: null,
   };
   const HIDE_ALL_KEY  = 'mori.hideAll.'  + slug;
   state.hideAllTrees  = localStorage.getItem(HIDE_ALL_KEY)  === '1';
@@ -176,6 +179,18 @@ async function initRoom() {
     updateClock();
     setInterval(updateClock, 1000);
   }
+
+  // 天気バッジ — 岐阜県美濃市の現在天気を10分ごとに更新
+  const weatherEl = document.getElementById('weather-badge');
+  async function refreshWeather() {
+    const w = await fetchWeather();
+    if (w) {
+      state.weather = w;
+      if (weatherEl) weatherEl.textContent = weatherLabel(w.category);
+    }
+  }
+  refreshWeather(); // awaitせずにバックグラウンド開始
+  setInterval(refreshWeather, 10 * 60 * 1000);
 
   const sess = loadSession(slug);
   if (sess && !isTokenExpired(sess.editToken)) {
@@ -316,6 +331,30 @@ async function initRoom() {
       updatePanel();
       showToast('メールを更新しました', 'success');
     },
+    // 管理者: お知らせ(Tips)管理
+    onAdminListTips: async () => {
+      if (!state.adminToken) return [];
+      return await api.adminListTips(state.adminToken, state.room.slug);
+    },
+    onAdminCreateTip: async ({ title, body, enabled }) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminCreateTip(state.adminToken, state.room.slug, title, body, enabled);
+      showToast('お知らせを追加しました', 'success');
+    },
+    onAdminUpdateTip: async ({ tipId, title, body, enabled }) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminUpdateTip(state.adminToken, tipId, title, body, enabled);
+      showToast('お知らせを保存しました', 'success');
+    },
+    onAdminDeleteTip: async (tipId) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminDeleteTip(state.adminToken, tipId);
+      showToast('お知らせを削除しました', 'success');
+    },
+    onAdminListTipReads: async (tipId) => {
+      if (!state.adminToken) return [];
+      return await api.adminListTipReads(state.adminToken, tipId);
+    },
     // 樹の表示/非表示トグル(ローカル)
     onToggleHideAll: () => {
       state.hideAllTrees = !state.hideAllTrees;
@@ -380,6 +419,22 @@ async function initRoom() {
   live.notifyDataChanged();
   live.start();
   console.log('[phase2] liveforest started, treeIds:', [...treeIdsRef]);
+
+  // ログイン済ユーザーの未読 Tips を1画面で連続表示(古い順)
+  if (state.session?.editToken) {
+    (async () => {
+      try {
+        const tips = await api.listUnreadTips(state.session.editToken, slug, 10);
+        if (Array.isArray(tips) && tips.length > 0) {
+          const { showTipsStack } = await import('./editor.js');
+          showTipsStack(tips, async (tipId) => {
+            try { await api.markTipRead(state.session.editToken, tipId); }
+            catch (e) { console.warn('markTipRead failed', e); }
+          });
+        }
+      } catch (e) { console.warn('listUnreadTips failed', e); }
+    })();
+  }
 
   // Realtime setAuth完了を待つ
   const { realtimeReady } = await import('./supabase.js');
@@ -564,5 +619,8 @@ async function initRoom() {
     state.trees = trees;
     layoutRandom(state.trees, state.sessionSeed);
     document.getElementById('forest-count').textContent = `${trees.length}本の樹`;
+    const totalNodes = trees.reduce((s, t) => s + (t.nodes?.length || 0), 0);
+    const ncEl = document.getElementById('node-count');
+    if (ncEl) ncEl.textContent = `${totalNodes}個のマイワード`;
   }
 }

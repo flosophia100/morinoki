@@ -2,6 +2,7 @@ import { drawTree, trunkRadiusFor } from './tree.js';
 import { seededRandom, stringHash } from './utils.js';
 import { atmosphereAt } from './atmosphere.js';
 import { Critters, drawBackgroundCanopies } from './critters.js';
+import { drawWeather } from './weather.js';
 
 // 樹数に応じたフィールド半径(中心から)
 //   1本 → 600px、10本 → ~830px、30本 → ~1350px
@@ -325,6 +326,9 @@ export function createForest(canvas, state) {
     ctx.restore();
 
     critters.render(ctx);
+
+    // 天気オーバーレイ(screen 座標、最前面一歩前)
+    drawWeather(ctx, W, H, state.weather, now);
   }
 
   return { render, resize, screenToWorld };
