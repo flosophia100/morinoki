@@ -428,6 +428,11 @@ function adminAmbienceTab(state) {
         <label class="design-label">背景森影の密度</label>
         <input data-ambience-key="canopyDensity" type="range" min="0" max="1" step="0.01" value="${amb.canopyDensity ?? 0.5}">
       </div>
+      <div class="design-row">
+        <label class="design-label">曇り日の霧の濃さ</label>
+        <input data-ambience-key="mistIntensity" type="range" min="0" max="1" step="0.01" value="${amb.mistIntensity ?? 0.5}">
+      </div>
+      <p class="ip-hint" style="font-size:0.72rem;margin-top:0.3rem">※ 曇り日(岐阜県美濃市の天気が曇り)のとき、画面にぷかぷかと漂う霧の濃さ。</p>
       <button data-action="ambience-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
     </div>
   `;

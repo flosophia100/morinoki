@@ -57,45 +57,63 @@ export async function fetchWeather() {
 // ------ 描画 ------
 // t: パフォーマンス時刻(ms)。アニメーション用。
 // weather: { category } | null
-export function drawWeather(ctx, W, H, weather, t) {
+// ambience: mistIntensity を参照。未指定時は 0.5 相当
+export function drawWeather(ctx, W, H, weather, t, ambience = null) {
   if (!weather) return;
-  if (weather.category === 'cloudy') drawClouds(ctx, W, H, t);
+  if (weather.category === 'cloudy') drawMist(ctx, W, H, t, ambience);
   else if (weather.category === 'rainy') drawRain(ctx, W, H, t);
   // sunny は特に重ね無し(背景の atmosphere に任せる)
 }
 
-// ---- 雲: ゆっくり水平に漂う楕円 6〜8個、alpha 控えめ ----
-function drawClouds(ctx, W, H, t) {
+// ---- 曇り=霧: 多数の小さな霧パッチ(radial gradient で縁ぼかし)がゆっくり漂う ----
+//   mistIntensity(0-1) で密度・濃さを制御。0 = ほぼ見えない、1 = 濃霧
+function drawMist(ctx, W, H, t, ambience) {
+  const intensity = ambience && typeof ambience.mistIntensity === 'number'
+    ? Math.max(0, Math.min(1, ambience.mistIntensity))
+    : 0.5;
+  if (intensity <= 0.01) return;
+
   ctx.save();
-  // わずかに画面トーンを落とす(読みやすさを害さない程度)
-  ctx.fillStyle = 'rgba(90, 100, 110, 0.06)';
+  // 画面全体をわずかに曇らせる
+  ctx.fillStyle = `rgba(90, 100, 110, ${0.02 + intensity * 0.06})`;
   ctx.fillRect(0, 0, W, H);
 
-  const CLOUDS = 7;
-  for (let i = 0; i < CLOUDS; i++) {
-    const speed = 0.008 + (i % 3) * 0.004; // 比較的ゆっくり
-    const baseX = (i * W) / CLOUDS - W * 0.2;
-    const x = ((baseX + t * speed) % (W * 1.4)) - W * 0.2;
-    const y = 60 + ((i * 73) % 180);
-    const rx = 80 + (i % 3) * 25;
-    const ry = 22 + (i % 2) * 8;
-    drawCloud(ctx, x, y, rx, ry);
+  // 霧パッチの総数と最大アルファ
+  const N = Math.floor(14 + intensity * 28);         // 14〜42個
+  const maxAlpha = 0.06 + intensity * 0.22;          // 0.06〜0.28
+  const tSec = t / 1000;
+
+  for (let i = 0; i < N; i++) {
+    // deterministic な種(描画が安定)
+    const sx = ((i * 1103515245 + 12345) & 0x7fffffff) % 1000 / 1000;
+    const sy = ((i * 2147483647 + 98765) & 0x7fffffff) % 1000 / 1000;
+    const sr = ((i * 48271 + 54321) & 0x7fffffff) % 1000 / 1000;
+
+    const speedX = (0.1 + sr * 0.35) * (sx < 0.5 ? 1 : -1); // 左右ランダム
+    const baseX = sx * (W + 300) - 150;
+    const x = (baseX + tSec * speedX * 18 + 1500) % (W + 300) - 150;
+    const y = sy * H * 0.85 + H * 0.05;
+
+    // 解像度の高い"斑": 各パッチにさらに複数のサブ円を重ねて縁を崩す
+    const R = 40 + sr * 120;  // 40〜160px
+    const layers = 3 + (i % 3);
+    for (let k = 0; k < layers; k++) {
+      const kRng = ((i * 31 + k * 97) & 0x7fffffff) % 1000 / 1000;
+      const r = R * (0.55 + kRng * 0.45);
+      const ox = (kRng - 0.5) * R * 0.6;
+      const oy = (((kRng * 7) % 1)) * R * 0.4 - R * 0.2;
+      const alpha = maxAlpha * (0.35 + kRng * 0.65);
+      const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+      g.addColorStop(0, `rgba(248, 248, 252, ${alpha})`);
+      g.addColorStop(0.55, `rgba(245, 247, 250, ${alpha * 0.55})`);
+      g.addColorStop(1, 'rgba(245, 247, 250, 0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
-}
-
-function drawCloud(ctx, cx, cy, rx, ry) {
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-  // 3つの円を重ねてもこもこ形に
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx * 0.55, ry * 1.0, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(cx - rx * 0.45, cy + ry * 0.2, rx * 0.35, ry * 0.75, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(cx + rx * 0.45, cy + ry * 0.2, rx * 0.4, ry * 0.8, 0, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 // ---- 雨: 斜めのストロークを多数落下(しとしと、読みやすさ優先で薄め) ----

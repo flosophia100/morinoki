@@ -328,7 +328,7 @@ export function createForest(canvas, state) {
     critters.render(ctx);
 
     // 天気オーバーレイ(screen 座標、最前面一歩前)
-    drawWeather(ctx, W, H, state.weather, now);
+    drawWeather(ctx, W, H, state.weather, now, state.ambience);
   }
 
   return { render, resize, screenToWorld };

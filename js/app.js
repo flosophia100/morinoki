@@ -621,6 +621,6 @@ async function initRoom() {
     document.getElementById('forest-count').textContent = `${trees.length}本の樹`;
     const totalNodes = trees.reduce((s, t) => s + (t.nodes?.length || 0), 0);
     const ncEl = document.getElementById('node-count');
-    if (ncEl) ncEl.textContent = `${totalNodes}個のマイワード`;
+    if (ncEl) ncEl.textContent = `${totalNodes}本の枝`;
   }
 }

@@ -39,6 +39,7 @@ export const AMBIENCE_DEFAULTS = {
   season: 'auto',            // 'auto' | 'spring' | 'summer' | 'autumn' | 'winter'
   birdFreq: 0.5,             // 0..1 (出現頻度倍率)
   canopyDensity: 0.5,        // 0..1 (背景森影の密度)
+  mistIntensity: 0.5,        // 0..1 (曇り天気時の霧の濃さ)
 };
 
 export function mergeAmbience(raw) {
@@ -49,6 +50,7 @@ export function mergeAmbience(raw) {
     if (typeof raw.season === 'string') out.season = raw.season;
     const bf = Number(raw.birdFreq); if (Number.isFinite(bf) && bf >= 0 && bf <= 1) out.birdFreq = bf;
     const cd = Number(raw.canopyDensity); if (Number.isFinite(cd) && cd >= 0 && cd <= 1) out.canopyDensity = cd;
+    const mi = Number(raw.mistIntensity); if (Number.isFinite(mi) && mi >= 0 && mi <= 1) out.mistIntensity = mi;
   }
   return out;
 }
