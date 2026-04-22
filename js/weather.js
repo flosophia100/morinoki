@@ -54,19 +54,33 @@ export async function fetchWeather() {
   }
 }
 
+// 管理者が天気エフェクトを上書きしていればそれを優先。
+//   ambience.weatherOverride: 'auto' | 'sunny' | 'cloudy' | 'rainy'
+function resolveCategory(weather, ambience) {
+  const ov = ambience?.weatherOverride;
+  if (ov && ov !== 'auto' && ['sunny','cloudy','rainy'].includes(ov)) return ov;
+  return weather?.category || null;
+}
+
 // ------ 描画 ------
 // t: パフォーマンス時刻(ms)。アニメーション用。
 // weather: { category } | null
-// ambience: mistIntensity を参照。未指定時は 0.5 相当
+// ambience: mistIntensity / weatherOverride を参照
 export function drawWeather(ctx, W, H, weather, t, ambience = null) {
-  if (!weather) return;
-  if (weather.category === 'cloudy') drawMist(ctx, W, H, t, ambience);
-  else if (weather.category === 'rainy') drawRain(ctx, W, H, t);
+  const category = resolveCategory(weather, ambience);
+  if (!category) return;
+  if (category === 'cloudy') drawMist(ctx, W, H, t, ambience);
+  else if (category === 'rainy') {
+    // 雨のときも薄く霧を重ねて湿っぽさを出す
+    drawMist(ctx, W, H, t, ambience);
+    drawRain(ctx, W, H, t);
+  }
   // sunny は特に重ね無し(背景の atmosphere に任せる)
 }
 
-// ---- 曇り=霧: 多数の小さな霧パッチ(radial gradient で縁ぼかし)がゆっくり漂う ----
+// ---- 曇り=霧: 高解像度の霧パッチ(複数の固まり)が 2D ランダム方向にゆっくり漂う ----
 //   mistIntensity(0-1) で密度・濃さを制御。0 = ほぼ見えない、1 = 濃霧
+//   各パッチは固有の方向ベクトルを持ち、画面外に出たら反対側から再登場(トロイダル)
 function drawMist(ctx, W, H, t, ambience) {
   const intensity = ambience && typeof ambience.mistIntensity === 'number'
     ? Math.max(0, Math.min(1, ambience.mistIntensity))
@@ -78,39 +92,67 @@ function drawMist(ctx, W, H, t, ambience) {
   ctx.fillStyle = `rgba(90, 100, 110, ${0.02 + intensity * 0.06})`;
   ctx.fillRect(0, 0, W, H);
 
-  // 霧パッチの総数と最大アルファ
-  const N = Math.floor(14 + intensity * 28);         // 14〜42個
+  // 霧の"固まり" = 複数パッチのクラスタ。各クラスタごとにランダムな方向で移動
+  const CLUSTERS = Math.floor(5 + intensity * 10);   // 5〜15 個の固まり
+  const PATCHES_PER = 3 + Math.floor(intensity * 3); // 1クラスタあたり 3〜6 パッチ
   const maxAlpha = 0.06 + intensity * 0.22;          // 0.06〜0.28
   const tSec = t / 1000;
 
-  for (let i = 0; i < N; i++) {
-    // deterministic な種(描画が安定)
-    const sx = ((i * 1103515245 + 12345) & 0x7fffffff) % 1000 / 1000;
-    const sy = ((i * 2147483647 + 98765) & 0x7fffffff) % 1000 / 1000;
-    const sr = ((i * 48271 + 54321) & 0x7fffffff) % 1000 / 1000;
+  // 画面を上下左右に 200px オーバーフローさせた大きな矩形の中で wrap
+  const MARGIN = 250;
+  const FIELD_W = W + MARGIN * 2;
+  const FIELD_H = H + MARGIN * 2;
 
-    const speedX = (0.1 + sr * 0.35) * (sx < 0.5 ? 1 : -1); // 左右ランダム
-    const baseX = sx * (W + 300) - 150;
-    const x = (baseX + tSec * speedX * 18 + 1500) % (W + 300) - 150;
-    const y = sy * H * 0.85 + H * 0.05;
+  for (let c = 0; c < CLUSTERS; c++) {
+    // クラスタ固有の種 → 初期位置・速度・方向
+    const s1 = ((c * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const s2 = ((c * 2147483647 + 98765) & 0x7fffffff) / 0x7fffffff;
+    const s3 = ((c * 48271 + 54321)     & 0x7fffffff) / 0x7fffffff;
+    const s4 = ((c * 7919 + 11131)      & 0x7fffffff) / 0x7fffffff;
 
-    // 解像度の高い"斑": 各パッチにさらに複数のサブ円を重ねて縁を崩す
-    const R = 40 + sr * 120;  // 40〜160px
-    const layers = 3 + (i % 3);
-    for (let k = 0; k < layers; k++) {
-      const kRng = ((i * 31 + k * 97) & 0x7fffffff) % 1000 / 1000;
-      const r = R * (0.55 + kRng * 0.45);
-      const ox = (kRng - 0.5) * R * 0.6;
-      const oy = (((kRng * 7) % 1)) * R * 0.4 - R * 0.2;
-      const alpha = maxAlpha * (0.35 + kRng * 0.65);
-      const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-      g.addColorStop(0, `rgba(248, 248, 252, ${alpha})`);
-      g.addColorStop(0.55, `rgba(245, 247, 250, ${alpha * 0.55})`);
-      g.addColorStop(1, 'rgba(245, 247, 250, 0)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
-      ctx.fill();
+    // 速度 6〜24 px/sec、方向はランダム 2D
+    const speed = 6 + s3 * 18;
+    const angle = s4 * Math.PI * 2;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+
+    // 初期位置 (field 内)
+    const baseX = s1 * FIELD_W;
+    const baseY = s2 * FIELD_H;
+
+    // 現在位置(時間で移動 + wrap)
+    // 0..FIELD_W の範囲に収める
+    const rawX = baseX + tSec * vx;
+    const rawY = baseY + tSec * vy;
+    const cx = ((rawX % FIELD_W) + FIELD_W) % FIELD_W - MARGIN;
+    const cy = ((rawY % FIELD_H) + FIELD_H) % FIELD_H - MARGIN;
+
+    // クラスタ内で複数のサブパッチを配置
+    for (let p = 0; p < PATCHES_PER; p++) {
+      const ps = ((c * 131 + p * 37) & 0x7fffffff) / 0x7fffffff;
+      const pa = ps * Math.PI * 2;
+      const pd = 30 + (((c + p) * 53) % 80);  // クラスタ中心からの距離 30〜110
+      const x = cx + Math.cos(pa) * pd;
+      const y = cy + Math.sin(pa) * pd;
+
+      // 解像度を高める: 各パッチにも 2〜3 層のサブ円
+      const R = 35 + ps * 95;  // 35〜130 px
+      const layers = 2 + (p % 3);
+      for (let k = 0; k < layers; k++) {
+        const kRng = ((c * 31 + p * 97 + k * 7) & 0x7fffffff) / 0x7fffffff;
+        const r = R * (0.55 + kRng * 0.45);
+        const ox = (kRng - 0.5) * R * 0.6;
+        const oy = (((kRng * 7) % 1)) * R * 0.4 - R * 0.2;
+        const alpha = maxAlpha * (0.35 + kRng * 0.65);
+        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        g.addColorStop(0, `rgba(248, 248, 252, ${alpha})`);
+        g.addColorStop(0.55, `rgba(245, 247, 250, ${alpha * 0.55})`);
+        g.addColorStop(1, 'rgba(245, 247, 250, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
   ctx.restore();

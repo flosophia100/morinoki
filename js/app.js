@@ -182,15 +182,25 @@ async function initRoom() {
 
   // 天気バッジ — 岐阜県美濃市の現在天気を10分ごとに更新
   const weatherEl = document.getElementById('weather-badge');
+  // バッジは管理者の override を優先、無ければ実天気
+  function updateWeatherBadge() {
+    const ov = state.ambience?.weatherOverride;
+    const effective = (ov && ov !== 'auto') ? ov : state.weather?.category;
+    if (weatherEl) weatherEl.textContent = effective ? weatherLabel(effective) : '—';
+  }
   async function refreshWeather() {
     const w = await fetchWeather();
     if (w) {
       state.weather = w;
-      if (weatherEl) weatherEl.textContent = weatherLabel(w.category);
+      updateWeatherBadge();
     }
   }
   refreshWeather(); // awaitせずにバックグラウンド開始
   setInterval(refreshWeather, 10 * 60 * 1000);
+  // 初期ロード直後(天気取得前)も override があればバッジに反映
+  updateWeatherBadge();
+  // 管理者の override 変更を反映するため、ambience 変更側からフックを用意
+  state._updateWeatherBadge = updateWeatherBadge;
 
   const sess = loadSession(slug);
   if (sess && !isTokenExpired(sess.editToken)) {
@@ -365,11 +375,13 @@ async function initRoom() {
     onAmbiencePreview: (nextAmbience) => {
       state.ambience = mergeAmbience(nextAmbience);
       state.atmo = atmosphereAt(new Date(), state.ambience);
+      state._updateWeatherBadge && state._updateWeatherBadge();
       forest.render();
     },
     onAmbienceChange: async (nextAmbience) => {
       state.ambience = mergeAmbience(nextAmbience);
       state.atmo = atmosphereAt(new Date(), state.ambience);
+      state._updateWeatherBadge && state._updateWeatherBadge();
       forest.render();
       if (!state.adminToken) return;
       try { await api.setRoomAmbience(state.adminToken, state.room.slug, state.ambience); }

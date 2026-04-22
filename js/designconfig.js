@@ -40,7 +40,16 @@ export const AMBIENCE_DEFAULTS = {
   birdFreq: 0.5,             // 0..1 (出現頻度倍率)
   canopyDensity: 0.5,        // 0..1 (背景森影の密度)
   mistIntensity: 0.5,        // 0..1 (曇り天気時の霧の濃さ)
+  weatherOverride: 'auto',   // 'auto' | 'sunny' | 'cloudy' | 'rainy'
+                             //   'auto' は Open-Meteo の美濃市現在天気を使う
 };
+
+export const WEATHER_OVERRIDE_OPTIONS = [
+  { value: 'auto',   label: '自動(岐阜県美濃市の現在天気)' },
+  { value: 'sunny',  label: '☀ 晴れに固定' },
+  { value: 'cloudy', label: '☁ 曇りに固定' },
+  { value: 'rainy',  label: '🌧 雨に固定' },
+];
 
 export function mergeAmbience(raw) {
   const out = { ...AMBIENCE_DEFAULTS };
@@ -51,6 +60,10 @@ export function mergeAmbience(raw) {
     const bf = Number(raw.birdFreq); if (Number.isFinite(bf) && bf >= 0 && bf <= 1) out.birdFreq = bf;
     const cd = Number(raw.canopyDensity); if (Number.isFinite(cd) && cd >= 0 && cd <= 1) out.canopyDensity = cd;
     const mi = Number(raw.mistIntensity); if (Number.isFinite(mi) && mi >= 0 && mi <= 1) out.mistIntensity = mi;
+    if (typeof raw.weatherOverride === 'string' &&
+        ['auto','sunny','cloudy','rainy'].includes(raw.weatherOverride)) {
+      out.weatherOverride = raw.weatherOverride;
+    }
   }
   return out;
 }
