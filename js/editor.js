@@ -433,10 +433,22 @@ function adminAmbienceTab(state) {
         ${WEATHER_OVERRIDE_OPTIONS.map(o => `<option value="${o.value}" ${amb.weatherOverride===o.value?'selected':''}>${escapeHtml(o.label)}</option>`).join('')}
       </select>
       <div class="design-row" style="margin-top:0.5rem">
-        <label class="design-label">曇り/雨のときの霧の濃さ</label>
+        <label class="design-label">雲/霧の濃さ</label>
         <input data-ambience-key="mistIntensity" type="range" min="0" max="1" step="0.01" value="${amb.mistIntensity ?? 0.5}">
       </div>
-      <p class="ip-hint" style="font-size:0.72rem;margin-top:0.3rem">※ 天気エフェクトを固定すると全員のブラウザでその演出になります。</p>
+      <div class="design-row">
+        <label class="design-label">雨粒の落下速度</label>
+        <input data-ambience-key="rainSpeed" type="range" min="0" max="1" step="0.01" value="${amb.rainSpeed ?? 0.25}">
+      </div>
+      <div class="design-row">
+        <label class="design-label">雨粒の大きさ</label>
+        <input data-ambience-key="rainSize" type="range" min="0" max="1" step="0.01" value="${amb.rainSize ?? 0.25}">
+      </div>
+      <div class="design-row">
+        <label class="design-label">雨粒の量</label>
+        <input data-ambience-key="rainDensity" type="range" min="0" max="1" step="0.01" value="${amb.rainDensity ?? 0.5}">
+      </div>
+      <p class="ip-hint" style="font-size:0.72rem;margin-top:0.3rem">※ 天気エフェクトを固定すると全員のブラウザでその演出になります。雨雲の下には雲も薄く漂います。</p>
       <button data-action="ambience-reset" class="btn-secondary w-full" style="margin-top:0.4rem">既定に戻す</button>
     </div>
   `;

@@ -1,16 +1,9 @@
 // 岐阜県美濃市の現在天気を Open-Meteo から取得し、キャンバスに演出を重ねる。
-//   - fetchWeather(): 現在天気を取得、state.weather に格納
-//   - 10分キャッシュ(外側の setInterval で定期更新)
-//   - drawWeather(ctx, W, H, weather, t): 天気に応じた雲 / 雨粒オーバーレイ
-//   - 読みやすさを害さないよう、オーバーレイは薄く(alpha 控えめ)
+//   - fetchWeather(): 現在天気を取得
+//   - drawWeather(ctx, W, H, weather, t, ambience): 天気に応じたオーバーレイ
 //
-// WMO weather_code → category:
-//   0            → 'sunny'
-//   1, 2, 3      → 'cloudy'
-//   45, 48       → 'cloudy' (霧)
-//   51-67, 80-82 → 'rainy'
-//   71-77, 85-86 → 'rainy' (雪は雨として扱う、暫定)
-//   95-99        → 'rainy' (雷雨)
+// 管理者は ambience.weatherOverride で 'auto' 以外を指定すると
+// 手動でエフェクトを固定できる。
 
 const MINO_LAT = 35.54;
 const MINO_LON = 136.92;
@@ -54,143 +47,139 @@ export async function fetchWeather() {
   }
 }
 
-// 管理者が天気エフェクトを上書きしていればそれを優先。
-//   ambience.weatherOverride: 'auto' | 'sunny' | 'cloudy' | 'rainy'
 function resolveCategory(weather, ambience) {
   const ov = ambience?.weatherOverride;
   if (ov && ov !== 'auto' && ['sunny','cloudy','rainy'].includes(ov)) return ov;
   return weather?.category || null;
 }
 
+function clamp01(v, fallback = 0.5) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(1, n));
+}
+
+// 決定論的な [0,1) のハッシュ。i は整数、salt は定数ごとに異なる整数を渡す。
+function hash01(i, salt) {
+  // Math.imul で 32bit 整数乗算
+  let h = Math.imul(i | 0, 73856093) ^ Math.imul((salt | 0) + 1, 19349663);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h = h ^ (h >>> 16);
+  return (h >>> 0) / 4294967296;
+}
+
 // ------ 描画 ------
-// t: パフォーマンス時刻(ms)。アニメーション用。
-// weather: { category } | null
-// ambience: mistIntensity / weatherOverride を参照
 export function drawWeather(ctx, W, H, weather, t, ambience = null) {
   const category = resolveCategory(weather, ambience);
   if (!category) return;
-  if (category === 'cloudy') drawMist(ctx, W, H, t, ambience);
+  if (category === 'cloudy') drawClouds(ctx, W, H, t, ambience);
   else if (category === 'rainy') {
-    // 雨のときも薄く霧を重ねて湿っぽさを出す
-    drawMist(ctx, W, H, t, ambience);
-    drawRain(ctx, W, H, t);
+    drawClouds(ctx, W, H, t, ambience); // 雨雲下地
+    drawRain(ctx, W, H, t, ambience);
   }
-  // sunny は特に重ね無し(背景の atmosphere に任せる)
+  // sunny は特に重ね無し
 }
 
-// ---- 曇り=霧: 高解像度の霧パッチ(複数の固まり)が 2D ランダム方向にゆっくり漂う ----
-//   mistIntensity(0-1) で密度・濃さを制御。0 = ほぼ見えない、1 = 濃霧
-//   各パッチは固有の方向ベクトルを持ち、画面外に出たら反対側から再登場(トロイダル)
-function drawMist(ctx, W, H, t, ambience) {
-  const intensity = ambience && typeof ambience.mistIntensity === 'number'
-    ? Math.max(0, Math.min(1, ambience.mistIntensity))
-    : 0.5;
+// ---- 雲: ふわっとした「固まり」を複数、各自ランダム方向に2Dで漂流 ----
+//   ambience.mistIntensity (0-1) で雲の数・濃さを制御
+//   各雲は 4-6 の重なった半透明円(mochiパターン)
+function drawClouds(ctx, W, H, t, ambience) {
+  const intensity = clamp01(ambience?.mistIntensity, 0.5);
   if (intensity <= 0.01) return;
 
   ctx.save();
-  // 画面全体をわずかに曇らせる
-  ctx.fillStyle = `rgba(90, 100, 110, ${0.02 + intensity * 0.06})`;
+  // 全体のトーン落とし(控えめ)
+  ctx.fillStyle = `rgba(85, 95, 105, ${0.03 + intensity * 0.07})`;
   ctx.fillRect(0, 0, W, H);
 
-  // 霧の"固まり" = 複数パッチのクラスタ。各クラスタごとにランダムな方向で移動
-  const CLUSTERS = Math.floor(5 + intensity * 10);   // 5〜15 個の固まり
-  const PATCHES_PER = 3 + Math.floor(intensity * 3); // 1クラスタあたり 3〜6 パッチ
-  const maxAlpha = 0.06 + intensity * 0.22;          // 0.06〜0.28
+  const NUM = Math.floor(6 + intensity * 10);    // 6〜16個の雲
+  const baseAlpha = 0.14 + intensity * 0.24;     // 0.14〜0.38
   const tSec = t / 1000;
-
-  // 画面を上下左右に 200px オーバーフローさせた大きな矩形の中で wrap
-  const MARGIN = 250;
+  const MARGIN = 220;
   const FIELD_W = W + MARGIN * 2;
   const FIELD_H = H + MARGIN * 2;
 
-  for (let c = 0; c < CLUSTERS; c++) {
-    // クラスタ固有の種 → 初期位置・速度・方向
-    const s1 = ((c * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
-    const s2 = ((c * 2147483647 + 98765) & 0x7fffffff) / 0x7fffffff;
-    const s3 = ((c * 48271 + 54321)     & 0x7fffffff) / 0x7fffffff;
-    const s4 = ((c * 7919 + 11131)      & 0x7fffffff) / 0x7fffffff;
+  for (let i = 0; i < NUM; i++) {
+    const s1 = hash01(i, 11); // 初期 X
+    const s2 = hash01(i, 22); // 初期 Y
+    const s3 = hash01(i, 33); // 速度
+    const s4 = hash01(i, 44); // 方向
+    const s5 = hash01(i, 55); // サイズ
+    const s6 = hash01(i, 66); // alpha jitter
 
-    // 速度 6〜24 px/sec、方向はランダム 2D
-    const speed = 6 + s3 * 18;
+    // 速度 4〜18 px/sec、方向 0〜2π(全方向)
+    const speed = 4 + s3 * 14;
     const angle = s4 * Math.PI * 2;
     const vx = Math.cos(angle) * speed;
-    const vy = Math.sin(angle) * speed;
+    const vy = Math.sin(angle) * speed * 0.6; // 縦はやや遅め(自然に)
 
-    // 初期位置 (field 内)
-    const baseX = s1 * FIELD_W;
-    const baseY = s2 * FIELD_H;
-
-    // 現在位置(時間で移動 + wrap)
-    // 0..FIELD_W の範囲に収める
-    const rawX = baseX + tSec * vx;
-    const rawY = baseY + tSec * vy;
+    // トロイダル wrap で画面端から反対側に再登場
+    const rawX = s1 * FIELD_W + tSec * vx;
+    const rawY = s2 * FIELD_H + tSec * vy;
     const cx = ((rawX % FIELD_W) + FIELD_W) % FIELD_W - MARGIN;
     const cy = ((rawY % FIELD_H) + FIELD_H) % FIELD_H - MARGIN;
 
-    // クラスタ内で複数のサブパッチを配置
-    for (let p = 0; p < PATCHES_PER; p++) {
-      const ps = ((c * 131 + p * 37) & 0x7fffffff) / 0x7fffffff;
-      const pa = ps * Math.PI * 2;
-      const pd = 30 + (((c + p) * 53) % 80);  // クラスタ中心からの距離 30〜110
-      const x = cx + Math.cos(pa) * pd;
-      const y = cy + Math.sin(pa) * pd;
-
-      // 解像度を高める: 各パッチにも 2〜3 層のサブ円
-      const R = 35 + ps * 95;  // 35〜130 px
-      const layers = 2 + (p % 3);
-      for (let k = 0; k < layers; k++) {
-        const kRng = ((c * 31 + p * 97 + k * 7) & 0x7fffffff) / 0x7fffffff;
-        const r = R * (0.55 + kRng * 0.45);
-        const ox = (kRng - 0.5) * R * 0.6;
-        const oy = (((kRng * 7) % 1)) * R * 0.4 - R * 0.2;
-        const alpha = maxAlpha * (0.35 + kRng * 0.65);
-        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-        g.addColorStop(0, `rgba(248, 248, 252, ${alpha})`);
-        g.addColorStop(0.55, `rgba(245, 247, 250, ${alpha * 0.55})`);
-        g.addColorStop(1, 'rgba(245, 247, 250, 0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    const R = 50 + s5 * 90;                     // 雲のサイズ 50〜140
+    const alpha = baseAlpha * (0.7 + s6 * 0.3);
+    drawOnePuff(ctx, cx, cy, R, alpha, i);
   }
   ctx.restore();
 }
 
-// ---- 雨: 斜めのストロークを多数落下(しとしと、読みやすさ優先で薄め) ----
-//   deterministic に位相を分布させ、総数を制限
-function drawRain(ctx, W, H, t) {
+// 雲1つ = 4〜6個の半透明ラジアル円をまとめて描く(mochi のような形)
+function drawOnePuff(ctx, cx, cy, R, alpha, seed) {
+  const N = 4 + (seed % 3); // 4, 5, 6
+  for (let k = 0; k < N; k++) {
+    const a = (k / N) * Math.PI * 2 + hash01(seed, 100 + k) * 0.6;
+    const d = R * (0.35 + hash01(seed, 200 + k) * 0.35); // 中心からの距離
+    const r = R * (0.45 + hash01(seed, 300 + k) * 0.35); // 半径
+    const x = cx + Math.cos(a) * d;
+    const y = cy + Math.sin(a) * d;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0,   `rgba(252, 252, 255, ${alpha})`);
+    g.addColorStop(0.6, `rgba(250, 250, 254, ${alpha * 0.45})`);
+    g.addColorStop(1,   'rgba(250, 250, 254, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ---- 雨: 細く・小さく・ゆっくり(デフォルト)。ambience で調整可 ----
+function drawRain(ctx, W, H, t, ambience) {
+  const speedParam   = clamp01(ambience?.rainSpeed,   0.25);
+  const sizeParam    = clamp01(ambience?.rainSize,    0.25);
+  const densityParam = clamp01(ambience?.rainDensity, 0.5);
+
   ctx.save();
-  // 薄い青灰色のティント
-  ctx.fillStyle = 'rgba(70, 85, 110, 0.08)';
+  // 薄い青灰色のティント(湿り気)
+  ctx.fillStyle = `rgba(70, 85, 110, ${0.05 + sizeParam * 0.04})`;
   ctx.fillRect(0, 0, W, H);
 
-  const N = 90;
-  const FALL = 380;   // px/sec
-  const LEN = 18;
-  const ANGLE = 0.18; // ラジアン(ほぼ垂直)
-  const sx = Math.sin(ANGLE), cx = Math.cos(ANGLE);
+  const N = 30 + Math.floor(densityParam * 220);  // 30〜250本
+  const FALL = 60 + speedParam * 500;             // 60〜560 px/sec
+  const LEN = 5 + sizeParam * 20;                 // 5〜25 px
+  const THICKNESS = 0.35 + sizeParam * 1.15;      // 0.35〜1.5 px
+  const ANGLE = 0.12;                             // ほぼ垂直
+  const ax = Math.sin(ANGLE), ay = Math.cos(ANGLE);
 
-  ctx.strokeStyle = 'rgba(200, 215, 235, 0.35)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = `rgba(210, 225, 240, ${0.22 + sizeParam * 0.25})`;
+  ctx.lineWidth = THICKNESS;
   ctx.lineCap = 'round';
   ctx.beginPath();
   const tSec = t / 1000;
   for (let i = 0; i < N; i++) {
-    // deterministic per i + time offset
     const col = (i * 131) % W;
     const phase = (i * 37) % 1000;
-    const period = 1.8 + (i % 11) * 0.08;
     const y = ((tSec * FALL + phase) % (H + 120)) - 60;
-    const xBase = col + ((tSec * 28 + i * 41) % 60);
+    const xBase = col + ((tSec * 18 + i * 41) % 50);
     const x0 = xBase;
     const y0 = y;
-    const x1 = x0 + sx * LEN;
-    const y1 = y0 + cx * LEN;
+    const x1 = x0 + ax * LEN;
+    const y1 = y0 + ay * LEN;
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
-    void period;
   }
   ctx.stroke();
   ctx.restore();

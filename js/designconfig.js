@@ -39,9 +39,12 @@ export const AMBIENCE_DEFAULTS = {
   season: 'auto',            // 'auto' | 'spring' | 'summer' | 'autumn' | 'winter'
   birdFreq: 0.5,             // 0..1 (出現頻度倍率)
   canopyDensity: 0.5,        // 0..1 (背景森影の密度)
-  mistIntensity: 0.5,        // 0..1 (曇り天気時の霧の濃さ)
+  mistIntensity: 0.5,        // 0..1 (曇り天気時の雲/霧の濃さ)
   weatherOverride: 'auto',   // 'auto' | 'sunny' | 'cloudy' | 'rainy'
                              //   'auto' は Open-Meteo の美濃市現在天気を使う
+  rainSpeed: 0.25,           // 0..1 (雨粒の落下速度、0=ゆっくり)
+  rainSize: 0.25,            // 0..1 (雨粒の大きさ/太さ、0=細く小さい)
+  rainDensity: 0.5,          // 0..1 (雨粒の量)
 };
 
 export const WEATHER_OVERRIDE_OPTIONS = [
@@ -64,6 +67,9 @@ export function mergeAmbience(raw) {
         ['auto','sunny','cloudy','rainy'].includes(raw.weatherOverride)) {
       out.weatherOverride = raw.weatherOverride;
     }
+    const rs  = Number(raw.rainSpeed);   if (Number.isFinite(rs)  && rs  >= 0 && rs  <= 1) out.rainSpeed   = rs;
+    const rsz = Number(raw.rainSize);    if (Number.isFinite(rsz) && rsz >= 0 && rsz <= 1) out.rainSize    = rsz;
+    const rd  = Number(raw.rainDensity); if (Number.isFinite(rd)  && rd  >= 0 && rd  <= 1) out.rainDensity = rd;
   }
   return out;
 }
