@@ -327,37 +327,72 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-// 葉のシルエット(説明あり指標)。cx, cy はアイコンの上端中央。
-//   高さ h で幅は h * 0.6 程度。色は塗りのみ。
-export function drawLeafIcon(ctx, cx, cy, h, color) {
-  const w = h * 0.62;
+// 葉アイコン(説明あり指標) — 茎・葉脈付き、回転対応
+//   anchorX/Y: 茎根元(=葉の付け根)の位置。ここからアンカーを基準に rotate。
+//   angle: ラジアン(0=葉先が上)。-π/4 で「斜め45度」(葉先が左上)。
+//   h: 葉の本体の長さ。茎は h*0.42 程度
+//   color: 葉/茎/葉脈の色
+export function drawLeafIcon(ctx, anchorX, anchorY, angle, h, color) {
+  const w = h * 0.55;
+  const stemLen = h * 0.42;
   ctx.save();
+  ctx.translate(anchorX, anchorY);
+  ctx.rotate(angle);
+
+  // 茎(原点から下方向 +y へ伸びる)
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(1.2, h * 0.075);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, stemLen);
+  ctx.stroke();
+
+  // 葉本体(原点 = 葉の付け根、先端は -y 方向)
   ctx.fillStyle = color;
   ctx.beginPath();
-  // 上端の尖り
-  ctx.moveTo(cx, cy);
-  // 右側:上から下へ
+  ctx.moveTo(0, 0);
   ctx.bezierCurveTo(
-    cx + w * 0.85, cy + h * 0.18,
-    cx + w * 0.85, cy + h * 0.72,
-    cx, cy + h
+    w * 0.95, -h * 0.18,
+    w * 0.95, -h * 0.78,
+    0, -h
   );
-  // 左側:下から上へ
   ctx.bezierCurveTo(
-    cx - w * 0.85, cy + h * 0.72,
-    cx - w * 0.85, cy + h * 0.18,
-    cx, cy
+    -w * 0.95, -h * 0.78,
+    -w * 0.95, -h * 0.18,
+    0, 0
   );
   ctx.closePath();
   ctx.fill();
-  // 中心の葉脈(同色を少し暗くした線)
-  ctx.strokeStyle = color;
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = Math.max(0.6, h * 0.06);
+
+  // 中央の葉脈(主脈)
+  ctx.strokeStyle = '#000';
+  ctx.globalAlpha = 0.18;
+  ctx.lineWidth = Math.max(0.7, h * 0.06);
   ctx.beginPath();
-  ctx.moveTo(cx, cy + h * 0.05);
-  ctx.lineTo(cx, cy + h * 0.92);
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, -h * 0.95);
   ctx.stroke();
+
+  // 側脈(3対):主脈から左右に斜め前方へ
+  ctx.lineWidth = Math.max(0.5, h * 0.04);
+  ctx.globalAlpha = 0.22;
+  for (let i = 0; i < 3; i++) {
+    const fy = (i + 1) / 4;        // 0.25, 0.5, 0.75
+    const y0 = -h * fy;
+    // 葉の輪郭にぶつからない範囲で外向きに
+    const xEnd = w * (0.85 - fy * 0.5);
+    const yEnd = y0 - h * 0.10;
+    ctx.beginPath();
+    ctx.moveTo(0, y0);
+    ctx.lineTo(xEnd, yEnd);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y0);
+    ctx.lineTo(-xEnd, yEnd);
+    ctx.stroke();
+  }
+
   ctx.restore();
 }
 
@@ -428,9 +463,10 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     // 枝ノードのラベル色は幹と揃える
     const labelBg = isSelf ? 'rgba(234, 248, 228, 0.85)' : 'rgba(31, 26, 21, 0.6)';
     const labelFg = isSelf ? '#14351f' : '#f4ede0';
-    // 説明があればラベル矩形のすぐ下に「その木の色」の葉アイコンを置く
-    const trunkCol = isSelf ? '#5a9b6e' : '#6f8a7d';
-    const LEAF_H = 14;
+    // 説明があれば矩形の左上の角に被さる形で、朱色の葉アイコンを 45° 傾けて置く
+    const VERMILION = '#dc4124';
+    const LEAF_H = 18;
+    const LEAF_ANGLE = -Math.PI / 4; // 葉先が左上(矩形から外側)
     if (p.nr >= 20 * scale) {
       ctx.save();
       ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
@@ -447,9 +483,8 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.fillText(n.text, p.x, p.y);
       ctx.restore();
       if (n.description) {
-        const iconCx = rectX + rectW / 2;
-        const iconCy = rectY + rectH + 1;
-        drawLeafIcon(ctx, iconCx, iconCy, LEAF_H, trunkCol);
+        // アンカー = 矩形の左上角。葉先は -π/4 回転で左上へ、茎は右下(=矩形内)へ食い込む
+        drawLeafIcon(ctx, rectX, rectY, LEAF_ANGLE, LEAF_H, VERMILION);
       }
     } else {
       ctx.save();
@@ -469,9 +504,7 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.fillText(n.text, p.x + pad, p.y);
       ctx.restore();
       if (n.description) {
-        const iconCx = bgX + rectW / 2;
-        const iconCy = rectY + rectH + 1;
-        drawLeafIcon(ctx, iconCx, iconCy, LEAF_H, trunkCol);
+        drawLeafIcon(ctx, bgX, rectY, LEAF_ANGLE, LEAF_H, VERMILION);
       }
     }
 
