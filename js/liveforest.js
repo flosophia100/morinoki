@@ -32,6 +32,8 @@ export class LiveForest {
     this.lastSeen = new Set();
     this.spawnAt = new Map();
     this.now = () => performance.now();
+    // フレームレート非依存にするための経過時間追跡(ms)
+    this.lastTickAt = null;
   }
 
   start() {
@@ -67,7 +69,18 @@ export class LiveForest {
   tick() {
     const design = this.getDesign() || null;
     const speedMul = design ? (0.4 + design.shimmerSpeed * 1.2) : 1.0;
-    this.t += 0.016 * speedMul;
+    // 経過時間(秒)ベースで時刻を進める。タブ非可視中の長い空白は dt をキャップ。
+    //   旧: this.t += 0.016 * speedMul (60fpsを仮定 → 120Hz端末で2倍速、30fpsで半速)
+    //   新: this.t += dt * 0.96 * speedMul (60fps時は旧と完全互換)
+    const now = this.now();
+    let dt;
+    if (this.lastTickAt == null) {
+      dt = 1 / 60;
+    } else {
+      dt = Math.min(0.1, (now - this.lastTickAt) / 1000);
+    }
+    this.lastTickAt = now;
+    this.t += dt * 0.96 * speedMul;
     const ampMul = design ? (0.25 + design.shimmerAmp * 2.75) : 1.6;
     const trees = this.getTrees();
     // 初回 1 秒で 0→1 に(= 初回ジャンプ防止)
@@ -143,8 +156,7 @@ export class LiveForest {
       if (t._sepY  < -cap) t._sepY  = -cap;
     });
 
-    // 成長アニメ + 表示位置の合成
-    const now = this.now();
+    // 成長アニメ + 表示位置の合成(now は tick 冒頭で取得済み)
     trees.forEach(t => {
       const at = this.spawnAt.get(t.id);
       if (at == null) {
