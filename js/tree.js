@@ -327,6 +327,40 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// 葉のシルエット(説明あり指標)。cx, cy はアイコンの上端中央。
+//   高さ h で幅は h * 0.6 程度。色は塗りのみ。
+export function drawLeafIcon(ctx, cx, cy, h, color) {
+  const w = h * 0.62;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  // 上端の尖り
+  ctx.moveTo(cx, cy);
+  // 右側:上から下へ
+  ctx.bezierCurveTo(
+    cx + w * 0.85, cy + h * 0.18,
+    cx + w * 0.85, cy + h * 0.72,
+    cx, cy + h
+  );
+  // 左側:下から上へ
+  ctx.bezierCurveTo(
+    cx - w * 0.85, cy + h * 0.72,
+    cx - w * 0.85, cy + h * 0.18,
+    cx, cy
+  );
+  ctx.closePath();
+  ctx.fill();
+  // 中心の葉脈(同色を少し暗くした線)
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = Math.max(0.6, h * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + h * 0.05);
+  ctx.lineTo(cx, cy + h * 0.92);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // 発光リング(外縁を光らせる)
 //   3層の同心円をアルファ弱めで重ねる。n._r または trunkR の外側に広がる。
 export function drawGlow(ctx, cx, cy, baseR, color) {
@@ -394,9 +428,9 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
     // 枝ノードのラベル色は幹と揃える
     const labelBg = isSelf ? 'rgba(234, 248, 228, 0.85)' : 'rgba(31, 26, 21, 0.6)';
     const labelFg = isSelf ? '#14351f' : '#f4ede0';
-    // 説明があれば矩形のすぐ下に「その木の色」のアンダーラインを引く(10pt 太)
+    // 説明があればラベル矩形のすぐ下に「その木の色」の葉アイコンを置く
     const trunkCol = isSelf ? '#5a9b6e' : '#6f8a7d';
-    const ULINE_THICK = 10;
+    const LEAF_H = 14;
     if (p.nr >= 20 * scale) {
       ctx.save();
       ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
@@ -411,11 +445,12 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.fillRect(rectX, rectY, rectW, rectH);
       ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x, p.y);
-      if (n.description) {
-        ctx.fillStyle = trunkCol;
-        ctx.fillRect(rectX, rectY + rectH, rectW, ULINE_THICK);
-      }
       ctx.restore();
+      if (n.description) {
+        const iconCx = rectX + rectW / 2;
+        const iconCy = rectY + rectH + 1;
+        drawLeafIcon(ctx, iconCx, iconCy, LEAF_H, trunkCol);
+      }
     } else {
       ctx.save();
       ctx.font = `${11 * scale}px 'Klee One', serif`;
@@ -432,11 +467,12 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       ctx.fillRect(bgX, rectY, rectW, rectH);
       ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x + pad, p.y);
-      if (n.description) {
-        ctx.fillStyle = trunkCol;
-        ctx.fillRect(bgX, rectY + rectH, rectW, ULINE_THICK);
-      }
       ctx.restore();
+      if (n.description) {
+        const iconCx = bgX + rectW / 2;
+        const iconCy = rectY + rectH + 1;
+        drawLeafIcon(ctx, iconCx, iconCy, LEAF_H, trunkCol);
+      }
     }
 
     n._x = p.x; n._y = p.y; n._r = p.nr;
