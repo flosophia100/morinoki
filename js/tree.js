@@ -391,28 +391,30 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       densityMul: 1.1, design
     });
 
-    if (n.description) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(196, 154, 62, 0.95)';
-      ctx.beginPath();
-      ctx.arc(p.x + p.nr * 0.7, p.y - p.nr * 0.7, 2.8 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
     // 枝ノードのラベル色は幹と揃える
     const labelBg = isSelf ? 'rgba(234, 248, 228, 0.85)' : 'rgba(31, 26, 21, 0.6)';
     const labelFg = isSelf ? '#14351f' : '#f4ede0';
+    // 説明があれば矩形のすぐ下に「その木の色」のアンダーラインを引く(10pt 太)
+    const trunkCol = isSelf ? '#5a9b6e' : '#6f8a7d';
+    const ULINE_THICK = 10;
     if (p.nr >= 20 * scale) {
       ctx.save();
       ctx.font = `${Math.max(11, p.nr * 0.42)}px 'Klee One', serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const tw = ctx.measureText(n.text).width;
+      const rectX = p.x - tw/2 - 4;
+      const rectY = p.y - 9;
+      const rectW = tw + 8;
+      const rectH = 18;
       ctx.fillStyle = labelBg;
-      ctx.fillRect(p.x - tw/2 - 4, p.y - 9, tw + 8, 18);
+      ctx.fillRect(rectX, rectY, rectW, rectH);
       ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x, p.y);
+      if (n.description) {
+        ctx.fillStyle = trunkCol;
+        ctx.fillRect(rectX, rectY + rectH, rectW, ULINE_THICK);
+      }
       ctx.restore();
     } else {
       ctx.save();
@@ -423,10 +425,17 @@ export function drawTree(ctx, tree, cx, cy, scale = 1.0, opts = {}) {
       const pad = (p.nr + 6) * (isRight ? 1 : -1);
       const tw = ctx.measureText(n.text).width;
       const bgX = isRight ? p.x + pad - 2 : p.x + pad - tw - 4;
+      const rectY = p.y - 8;
+      const rectW = tw + 6;
+      const rectH = 16;
       ctx.fillStyle = labelBg;
-      ctx.fillRect(bgX, p.y - 8, tw + 6, 16);
+      ctx.fillRect(bgX, rectY, rectW, rectH);
       ctx.fillStyle = labelFg;
       ctx.fillText(n.text, p.x + pad, p.y);
+      if (n.description) {
+        ctx.fillStyle = trunkCol;
+        ctx.fillRect(bgX, rectY + rectH, rectW, ULINE_THICK);
+      }
       ctx.restore();
     }
 
