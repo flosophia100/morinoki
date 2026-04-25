@@ -88,6 +88,11 @@ export const api = {
     rpc('admin_delete_tip', { p_admin_token: adminToken, p_tip_id: tipId }),
   adminListTipReads: (adminToken, tipId) =>
     rpc('admin_list_tip_reads', { p_admin_token: adminToken, p_tip_id: tipId }),
+  // 統計
+  recordPageView: (roomSlug) =>
+    rpc('record_page_view', { p_room_slug: roomSlug }),
+  adminGetStats: (adminToken, roomSlug, days = 30) =>
+    rpc('admin_get_stats', { p_admin_token: adminToken, p_room_slug: roomSlug, p_days: days }),
   adminListUsers: (adminToken, roomSlug) =>
     rpc('admin_list_users', { p_admin_token: adminToken, p_room_slug: roomSlug }),
   adminDeleteUser: (adminToken, treeId) =>

@@ -186,6 +186,7 @@ function adminPanelHTML(state) {
     ['users',    'ユーザー'],
     ['trunks',   '幹'],
     ['tips',     'お知らせ'],
+    ['stats',    'アクセス'],
     ['design',   'デザイン'],
     ['shimmer',  'ゆらぎ'],
     ['ambience', '背景'],
@@ -201,6 +202,7 @@ function adminPanelHTML(state) {
     ${tab === 'users'    ? adminUsersTab(state)    : ''}
     ${tab === 'trunks'   ? adminTrunksTab(state)   : ''}
     ${tab === 'tips'     ? adminTipsTab(state)     : ''}
+    ${tab === 'stats'    ? adminStatsTab(state)    : ''}
     ${tab === 'design'   ? adminDesignTab(state)   : ''}
     ${tab === 'shimmer'  ? adminShimmerTab(state)  : ''}
     ${tab === 'ambience' ? adminAmbienceTab(state) : ''}
@@ -326,6 +328,99 @@ function formatDateTime(iso) {
   if (isNaN(d)) return '-';
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function shortDate(d) {
+  // 'YYYY-MM-DD' or Date → 'M/D'
+  let dt;
+  if (d instanceof Date) dt = d;
+  else { const s = String(d); dt = new Date(s + 'T00:00:00'); }
+  if (isNaN(dt)) return String(d);
+  return `${dt.getMonth()+1}/${dt.getDate()}`;
+}
+
+// 管理者「アクセス」タブ
+//   state.adminStats: { from, to, days, page_views[], new_trees[], new_nodes[],
+//                       total_trees, total_nodes, total_page_views }
+function adminStatsTab(state) {
+  const stats = state.adminStats;
+  const loading = state.adminStatsLoading;
+  if (loading) return `<div class="ip-block"><p class="ip-hint">読み込み中…</p></div>`;
+  if (!stats) {
+    return `<div class="ip-block">
+      <button data-action="admin-stats-refresh" class="btn-secondary w-full">統計を読み込む</button>
+    </div>`;
+  }
+
+  const pv    = stats.page_views || [];
+  const trees = stats.new_trees  || [];
+  const nodes = stats.new_nodes  || [];
+
+  // 直近のサマリー
+  const todayPV   = pv[pv.length - 1]?.count ?? 0;
+  const yestPV    = pv[pv.length - 2]?.count ?? 0;
+  const sumPV     = pv.reduce((s, x) => s + (x.count || 0), 0);
+  const sumTrees  = trees.reduce((s, x) => s + (x.count || 0), 0);
+  const sumNodes  = nodes.reduce((s, x) => s + (x.count || 0), 0);
+
+  // 棒グラフ最大値(各シリーズ自身の最大)
+  const maxOf = (arr) => Math.max(1, ...arr.map(x => x.count || 0));
+  const maxPV = maxOf(pv);
+  const maxTr = maxOf(trees);
+  const maxNd = maxOf(nodes);
+
+  function bars(series, max, color) {
+    return series.map(x => {
+      const h = Math.round((x.count || 0) / max * 36);
+      return `<span class="stat-bar" title="${shortDate(x.d)}: ${x.count}" style="height:${Math.max(2, h)}px;background:${color}"></span>`;
+    }).join('');
+  }
+
+  return `
+    <div class="ip-block">
+      <label class="mini-label">アクセス統計(直近${stats.days}日 / JST)</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">
+        ${shortDate(stats.from)} 〜 ${shortDate(stats.to)} ・
+        累計PV ${stats.total_page_views} ・ 樹 ${stats.total_trees} ・ 枝 ${stats.total_nodes}
+      </p>
+
+      <div class="stat-summary">
+        <div><span class="stat-num">${todayPV}</span><span class="stat-lbl">今日のPV</span></div>
+        <div><span class="stat-num">${yestPV}</span><span class="stat-lbl">昨日のPV</span></div>
+        <div><span class="stat-num">${sumPV}</span><span class="stat-lbl">期間PV</span></div>
+        <div><span class="stat-num">${sumTrees}</span><span class="stat-lbl">期間 新規樹</span></div>
+        <div><span class="stat-num">${sumNodes}</span><span class="stat-lbl">期間 新規枝</span></div>
+      </div>
+
+      <label class="mini-label" style="margin-top:0.6rem">日別PV(${stats.days}日)</label>
+      <div class="stat-bar-row">${bars(pv, maxPV, '#5a9b6e')}</div>
+
+      <label class="mini-label" style="margin-top:0.5rem">日別 新規樹</label>
+      <div class="stat-bar-row">${bars(trees, maxTr, '#c89566')}</div>
+
+      <label class="mini-label" style="margin-top:0.5rem">日別 新規枝</label>
+      <div class="stat-bar-row">${bars(nodes, maxNd, '#8ab0a0')}</div>
+
+      <details style="margin-top:0.5rem">
+        <summary class="ip-hint" style="cursor:pointer;font-size:0.78rem">数値を表示</summary>
+        <div style="overflow-x:auto;margin-top:0.3rem">
+          <table class="stat-table" style="border-collapse:collapse;font-size:0.74rem">
+            <thead><tr><th>日</th><th>PV</th><th>樹</th><th>枝</th></tr></thead>
+            <tbody>
+              ${pv.map((p, i) => `<tr>
+                <td>${shortDate(p.d)}</td>
+                <td>${p.count}</td>
+                <td>${trees[i]?.count ?? 0}</td>
+                <td>${nodes[i]?.count ?? 0}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </details>
+
+      <button data-action="admin-stats-refresh" class="btn-secondary w-full" style="margin-top:0.4rem">再読み込み</button>
+    </div>
+  `;
 }
 
 // 未読 Tips を1つのモーダルに連続して縦に並べて表示(閉じると全部既読化)
@@ -508,8 +603,26 @@ function wireIdle(el, state, cb) {
         catch { state.adminTips = []; }
         state.adminTipsLoading = false;
       }
+      if (state.adminTab === 'stats' && cb.onAdminGetStats) {
+        state.adminStatsLoading = true;
+        cb.onRerender && cb.onRerender();
+        try { state.adminStats = await cb.onAdminGetStats(30); }
+        catch { state.adminStats = null; }
+        state.adminStatsLoading = false;
+      }
       cb.onRerender && cb.onRerender();
     });
+  });
+
+  // アクセス統計: 再読み込み
+  el.querySelector('[data-action="admin-stats-refresh"]')?.addEventListener('click', async () => {
+    if (!cb.onAdminGetStats) return;
+    state.adminStatsLoading = true;
+    cb.onRerender && cb.onRerender();
+    try { state.adminStats = await cb.onAdminGetStats(30); }
+    catch { state.adminStats = null; }
+    state.adminStatsLoading = false;
+    cb.onRerender && cb.onRerender();
   });
 
   // ユーザー管理: 再読み込み

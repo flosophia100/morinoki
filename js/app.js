@@ -168,6 +168,15 @@ async function initRoom() {
   document.getElementById('forest-name').textContent = roomLabel;
   document.title = `${roomLabel} — morinokki`;
 
+  // ページビューを 1 セッション 1 回だけ記録(リロードでカウント、内部遷移ではしない)
+  try {
+    const pvKey = 'mori.pv.' + slug;
+    if (!sessionStorage.getItem(pvKey)) {
+      sessionStorage.setItem(pvKey, '1');
+      api.recordPageView(slug).catch(() => {});
+    }
+  } catch { /* sessionStorage 利用不可な環境は黙って無視 */ }
+
   // 画面右上のリアルタイム時計(HH:MM:SS)
   const clockEl = document.getElementById('room-clock');
   if (clockEl) {
@@ -364,6 +373,16 @@ async function initRoom() {
     onAdminListTipReads: async (tipId) => {
       if (!state.adminToken) return [];
       return await api.adminListTipReads(state.adminToken, tipId);
+    },
+    // 管理者: アクセス統計
+    onAdminGetStats: async (days = 30) => {
+      if (!state.adminToken) return null;
+      try {
+        const res = await api.adminGetStats(state.adminToken, state.room.slug, days);
+        // PostgREST は単一の json を { admin_get_stats: {...} } 風で返さず
+        // jsonb 値そのものを返すので、配列なら先頭を採用
+        return Array.isArray(res) ? res[0] : res;
+      } catch (e) { console.warn('adminGetStats failed', e); return null; }
     },
     // 樹の表示/非表示トグル(ローカル)
     onToggleHideAll: () => {

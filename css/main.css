@@ -252,6 +252,60 @@ body.panel-hidden .forest-container { inset: 0; }
   line-height: 1.6;
   white-space: pre-wrap;
 }
+
+/* 管理者「アクセス」タブ */
+.stat-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.3rem;
+  margin: 0.4rem 0;
+}
+.stat-summary > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.4rem 0.2rem;
+  background: rgba(122, 108, 92, 0.08);
+  border-radius: 0.3rem;
+}
+.stat-num {
+  font-family: 'Klee One', serif;
+  font-size: 1.05rem;
+  font-weight: bold;
+  color: var(--moss-deep, #3a4a3f);
+  font-variant-numeric: tabular-nums;
+}
+.stat-lbl {
+  font-size: 0.66rem;
+  color: var(--ink-soft, #777);
+  margin-top: 0.1rem;
+  text-align: center;
+}
+.stat-bar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 40px;
+  padding: 2px 0;
+  background: rgba(122, 108, 92, 0.05);
+  border-bottom: 1px solid rgba(122, 108, 92, 0.18);
+  border-radius: 0.2rem;
+}
+.stat-bar {
+  flex: 1 1 0;
+  min-width: 2px;
+  border-radius: 1px;
+  opacity: 0.85;
+}
+.stat-table th,
+.stat-table td {
+  padding: 0.15rem 0.4rem;
+  border-bottom: 1px dotted rgba(122, 108, 92, 0.2);
+  text-align: right;
+}
+.stat-table th { color: var(--ink-soft, #777); font-weight: normal; }
+.stat-table td:first-child,
+.stat-table th:first-child { text-align: left; }
 /* plant-btn removed */
 .ip-auth-form input[type="text"],
 .ip-auth-form input[type="password"],
