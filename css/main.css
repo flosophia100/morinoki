@@ -306,6 +306,50 @@ body.panel-hidden .forest-container { inset: 0; }
 .stat-table th { color: var(--ink-soft, #777); font-weight: normal; }
 .stat-table td:first-child,
 .stat-table th:first-child { text-align: left; }
+
+/* 部屋ヘッダーメッセージ */
+.room-message {
+  position: fixed;
+  top: calc(2.5rem + env(safe-area-inset-top, 0));
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  max-width: min(720px, calc(100% - 2rem));
+  padding: 0.55rem 0.9rem;
+  background: rgba(255, 248, 220, 0.85);
+  color: var(--moss-deep, #3a4a3f);
+  border: 1px solid rgba(122, 108, 92, 0.25);
+  border-radius: 0.4rem;
+  font-family: 'Shippori Mincho', serif;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  text-align: center;
+  z-index: 50;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(24, 30, 26, 0.08);
+}
+.room-message.hidden { display: none; }
+.room-message a { color: var(--moss-deep, #3a4a3f); text-decoration: underline; }
+@media (max-width: 700px) {
+  .room-message { font-size: 0.78rem; padding: 0.4rem 0.6rem; }
+}
+
+/* moritetu1st の空白ダブルクリック新規入力 */
+.mori-inline-input {
+  position: fixed;
+  z-index: 80;
+  transform: translate(-50%, -50%);
+  font-family: 'Shippori Mincho', serif;
+  font-size: 1rem;
+  padding: 0.4rem 0.6rem;
+  border: 2px solid var(--moss-deep, #3a4a3f);
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 252, 0.95);
+  color: #14351f;
+  outline: none;
+  box-shadow: 0 4px 12px rgba(24, 30, 26, 0.2);
+  width: min(220px, 60vw);
+}
 /* plant-btn removed */
 .ip-auth-form input[type="text"],
 .ip-auth-form input[type="password"],

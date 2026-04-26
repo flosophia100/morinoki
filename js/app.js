@@ -13,6 +13,16 @@ async function initAdminPage() {
   await initAdmin();
 }
 
+// ヘッダーメッセージの安全レンダリング: HTMLエスケープ + URL自動リンク + 改行→<br>
+export function renderRoomMessageHtml(raw) {
+  const escaped = (raw || '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+  const linked = escaped.replace(/(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+  return linked.replace(/\n/g, '<br>');
+}
+
 function fitForestToView(canvas, state) {
   if (!state.trees.length) return;
   const rect = canvas.getBoundingClientRect();
@@ -168,14 +178,47 @@ async function initRoom() {
   document.getElementById('forest-name').textContent = roomLabel;
   document.title = `${roomLabel} — morinokki`;
 
-  // ページビューを 1 セッション 1 回だけ記録(リロードでカウント、内部遷移ではしない)
+  // 匿名 UUID(セッションごと)— 統計/moritetu 操作の主体識別子
   try {
-    const pvKey = 'mori.pv.' + slug;
-    if (!sessionStorage.getItem(pvKey)) {
-      sessionStorage.setItem(pvKey, '1');
-      api.recordPageView(slug).catch(() => {});
+    const ANON_KEY = 'mori.anon.uuid';
+    let anonId = sessionStorage.getItem(ANON_KEY);
+    if (!anonId) {
+      anonId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'a-' + Math.random().toString(16).slice(2) + '-' + Date.now().toString(16);
+      sessionStorage.setItem(ANON_KEY, anonId);
     }
-  } catch { /* sessionStorage 利用不可な環境は黙って無視 */ }
+    state.anonId = anonId;
+  } catch { state.anonId = null; }
+
+  // 訪問記録: moritetu1st は record_room_visit(5分bucket UU)、selftree は recordPageView
+  if (state.room.field_type === 'moritetu1st') {
+    if (state.anonId) {
+      api.recordRoomVisit(slug, state.anonId).catch(() => {});
+      setInterval(() => api.recordRoomVisit(slug, state.anonId).catch(() => {}), 5 * 60 * 1000);
+    }
+  } else {
+    try {
+      const pvKey = 'mori.pv.' + slug;
+      if (!sessionStorage.getItem(pvKey)) {
+        sessionStorage.setItem(pvKey, '1');
+        api.recordPageView(slug).catch(() => {});
+      }
+    } catch { /* sessionStorage 利用不可な環境は黙って無視 */ }
+  }
+
+  // ヘッダーメッセージ(部屋単位、両 type 共通)
+  const msgEl = document.getElementById('room-message');
+  function applyRoomMessage(raw) {
+    state.headerMessage = raw || '';
+    if (!msgEl) return;
+    const txt = (raw || '').trim();
+    if (!txt) { msgEl.classList.add('hidden'); msgEl.innerHTML = ''; return; }
+    msgEl.classList.remove('hidden');
+    msgEl.innerHTML = renderRoomMessageHtml(txt);
+  }
+  api.getRoomMessage(slug).then(r => applyRoomMessage(typeof r === 'string' ? r : (r?.get_room_message ?? r))).catch(() => {});
+  state.applyRoomMessage = applyRoomMessage;
 
   // 画面右上のリアルタイム時計(HH:MM:SS)
   const clockEl = document.getElementById('room-clock');
@@ -210,6 +253,13 @@ async function initRoom() {
   updateWeatherBadge();
   // 管理者の override 変更を反映するため、ambience 変更側からフックを用意
   state._updateWeatherBadge = updateWeatherBadge;
+
+  // === field_type に応じて分岐 ===
+  if (state.room.field_type === 'moritetu1st') {
+    const { initMoriRoom } = await import('./morieditor.js');
+    await initMoriRoom({ state, slug });
+    return;
+  }
 
   const sess = loadSession(slug);
   if (sess && !isTokenExpired(sess.editToken)) {
@@ -379,10 +429,15 @@ async function initRoom() {
       if (!state.adminToken) return null;
       try {
         const res = await api.adminGetStats(state.adminToken, state.room.slug, days);
-        // PostgREST は単一の json を { admin_get_stats: {...} } 風で返さず
-        // jsonb 値そのものを返すので、配列なら先頭を採用
         return Array.isArray(res) ? res[0] : res;
       } catch (e) { console.warn('adminGetStats failed', e); return null; }
+    },
+    // 管理者: 部屋メッセージ
+    onAdminSetRoomMessage: async (message) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminSetRoomMessage(state.adminToken, state.room.slug, message);
+      state.applyRoomMessage && state.applyRoomMessage(message);
+      showToast('メッセージを保存しました', 'success');
     },
     // 樹の表示/非表示トグル(ローカル)
     onToggleHideAll: () => {

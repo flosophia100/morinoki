@@ -29,8 +29,8 @@ function rpc(name, args) {
 
 export const api = {
   // 森作成はグローバル管理者のみ(admin_token必須)
-  createRoom: (adminToken, slug, name) =>
-    rpc('create_room', { p_admin_token: adminToken, p_slug: slug, p_name: name }),
+  createRoom: (adminToken, slug, name, fieldType = 'selftree') =>
+    rpc('create_room', { p_admin_token: adminToken, p_slug: slug, p_name: name, p_field_type: fieldType }),
   deleteRoom: (adminToken, slug) =>
     rpc('delete_room', { p_admin_token: adminToken, p_slug: slug }),
   listRooms: (adminToken) =>
@@ -93,6 +93,33 @@ export const api = {
     rpc('record_page_view', { p_room_slug: roomSlug }),
   adminGetStats: (adminToken, roomSlug, days = 30) =>
     rpc('admin_get_stats', { p_admin_token: adminToken, p_room_slug: roomSlug, p_days: days }),
+  // moritetu1st 公開 RPC
+  moriList: (roomSlug) => rpc('mori_list', { p_room_slug: roomSlug }),
+  moriCreateNode: (roomSlug, anonId, text, color, x, y) =>
+    rpc('mori_create_node', { p_room_slug: roomSlug, p_anon_id: anonId, p_text: text, p_color: color || null, p_x: x, p_y: y }),
+  moriUpdateNode: (roomSlug, anonId, nodeId, { text, color, description, size }) =>
+    rpc('mori_update_node', {
+      p_room_slug: roomSlug, p_anon_id: anonId, p_node_id: nodeId,
+      p_text: text ?? null, p_color: color ?? null,
+      p_description: description ?? null, p_size: size ?? null
+    }),
+  moriMoveNode: (roomSlug, anonId, nodeId, x, y) =>
+    rpc('mori_move_node', { p_room_slug: roomSlug, p_anon_id: anonId, p_node_id: nodeId, p_x: x, p_y: y }),
+  moriDeleteNode: (roomSlug, anonId, nodeId) =>
+    rpc('mori_delete_node', { p_room_slug: roomSlug, p_anon_id: anonId, p_node_id: nodeId }),
+  moriToggleEdge: (roomSlug, anonId, aId, bId) =>
+    rpc('mori_toggle_edge', { p_room_slug: roomSlug, p_anon_id: anonId, p_a: aId, p_b: bId }),
+  recordRoomVisit: (roomSlug, anonId) =>
+    rpc('record_room_visit', { p_room_slug: roomSlug, p_anon_id: anonId }),
+  getRoomMessage: (roomSlug) => rpc('get_room_message', { p_room_slug: roomSlug }),
+  adminSetRoomMessage: (adminToken, roomSlug, message) =>
+    rpc('admin_set_room_message', { p_admin_token: adminToken, p_room_slug: roomSlug, p_message: message }),
+  adminGetUniqueUsersHourly: (adminToken, roomSlug, days = 7) =>
+    rpc('admin_get_unique_users_hourly', { p_admin_token: adminToken, p_room_slug: roomSlug, p_days: days }),
+  adminListActiveUsers: (adminToken, roomSlug, withinMinutes = 30) =>
+    rpc('admin_list_active_users', { p_admin_token: adminToken, p_room_slug: roomSlug, p_within_minutes: withinMinutes }),
+  adminMoriResetRoom: (adminToken, roomSlug) =>
+    rpc('admin_mori_reset_room', { p_admin_token: adminToken, p_room_slug: roomSlug }),
   adminListUsers: (adminToken, roomSlug) =>
     rpc('admin_list_users', { p_admin_token: adminToken, p_room_slug: roomSlug }),
   adminDeleteUser: (adminToken, treeId) =>

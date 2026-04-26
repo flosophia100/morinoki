@@ -69,8 +69,9 @@ export async function initAdmin() {
     if (!token) return;
     const name = document.getElementById('new-room-name').value.trim();
     const slug = document.getElementById('new-room-slug').value.trim().toLowerCase();
+    const fieldType = document.querySelector('input[name="field_type"]:checked')?.value || 'selftree';
     try {
-      await api.createRoom(token, slug, name);
+      await api.createRoom(token, slug, name, fieldType);
       showToast(`森「${name || slug}」を作成しました`, 'success');
       document.getElementById('new-room-name').value = '';
       document.getElementById('new-room-slug').value = '';

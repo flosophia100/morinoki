@@ -120,6 +120,60 @@ export function renderInfoPanel(state, selection, callbacks) {
       wireOtherNode(el, state, selection.tree, selection.node, callbacks);
     }
   }
+  // moritetu1st 用: ノード編集パネル
+  if (selection.kind === 'mori-node') {
+    el.innerHTML = moriNodeHTML(selection.node, state);
+    wireMoriNode(el, state, selection.node, callbacks);
+  }
+}
+
+function moriNodeHTML(node, state) {
+  const palette = state.moriPalette || [
+    '#5a9b6e','#6f8a7d','#c9dca8','#a8c19a','#8ab0a0','#b8e0cc',
+    '#f4ecb0','#f2ece0','#f4cfd6','#cdb4dc',
+  ];
+  const colorList = palette.includes(node.color) ? palette : [node.color, ...palette];
+  return `
+    <div class="ip-block">
+      <p class="ip-back-link"><button data-action="mori-back" class="btn-link">← 森へ戻る</button></p>
+      <div class="ip-head">
+        <span class="self-badge">マイワード(枝)</span>
+      </div>
+    </div>
+    <div class="ip-block">
+      <label class="mini-label">マイワード</label>
+      <input id="mn-text" type="text" maxlength="40" value="${escapeHtml(node.text || '')}">
+      <label class="mini-label">色</label>
+      <div class="color-row" id="mn-color">
+        ${colorList.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
+      </div>
+      <label class="mini-label">説明(任意・300字)</label>
+      <textarea id="mn-desc" maxlength="300" rows="4">${escapeHtml(node.description || '')}</textarea>
+      <div class="ip-actions">
+        <button id="mn-delete" class="btn-danger">削除</button>
+        <button id="mn-save" class="btn-primary">保存</button>
+      </div>
+      <p class="ip-hint" style="font-size:0.74rem;margin-top:0.4rem">この部屋では誰でも自由にマイワードの編集・削除ができます。</p>
+    </div>
+  `;
+}
+
+function wireMoriNode(el, state, node, cb) {
+  el.querySelector('[data-action="mori-back"]')?.addEventListener('click', () => cb.onMoriBack && cb.onMoriBack());
+  el.querySelectorAll('#mn-color button').forEach(b => b.addEventListener('click', () => {
+    el.querySelectorAll('#mn-color button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  }));
+  el.querySelector('#mn-save')?.addEventListener('click', () => {
+    const text = el.querySelector('#mn-text')?.value?.trim();
+    if (!text) return;
+    const color = el.querySelector('#mn-color .on')?.dataset.color || node.color;
+    const description = el.querySelector('#mn-desc')?.value?.trim() || null;
+    cb.onMoriUpdateNode && cb.onMoriUpdateNode({ nodeId: node.id, text, color, description });
+  });
+  el.querySelector('#mn-delete')?.addEventListener('click', () => {
+    cb.onMoriDeleteNode && cb.onMoriDeleteNode(node.id);
+  });
 }
 
 // ----- Idle(未ログイン/タイトル画面) -----
@@ -182,11 +236,22 @@ function idleHTML(state) {
 // ----- 管理者パネル(タブ式) -----
 function adminPanelHTML(state) {
   const tab = state.adminTab || 'users';
-  const tabs = [
+  const isMori = state.room?.field_type === 'moritetu1st';
+  const tabs = isMori ? [
+    ['users',    'ユーザー'],
+    ['tips',     'お知らせ'],
+    ['stats',    'アクセス'],
+    ['message',  'メッセージ'],
+    ['design',   'デザイン'],
+    ['shimmer',  'ゆらぎ'],
+    ['ambience', '背景'],
+    ['tools',    'ツール'],
+  ] : [
     ['users',    'ユーザー'],
     ['trunks',   '幹'],
     ['tips',     'お知らせ'],
     ['stats',    'アクセス'],
+    ['message',  'メッセージ'],
     ['design',   'デザイン'],
     ['shimmer',  'ゆらぎ'],
     ['ambience', '背景'],
@@ -203,6 +268,7 @@ function adminPanelHTML(state) {
     ${tab === 'trunks'   ? adminTrunksTab(state)   : ''}
     ${tab === 'tips'     ? adminTipsTab(state)     : ''}
     ${tab === 'stats'    ? adminStatsTab(state)    : ''}
+    ${tab === 'message'  ? adminMessageTab(state)  : ''}
     ${tab === 'design'   ? adminDesignTab(state)   : ''}
     ${tab === 'shimmer'  ? adminShimmerTab(state)  : ''}
     ${tab === 'ambience' ? adminAmbienceTab(state) : ''}
@@ -215,6 +281,10 @@ function adminPanelHTML(state) {
 }
 
 function adminUsersTab(state) {
+  // moritetu1st では「現在アクティブな匿名ユーザー一覧」
+  if (state.room?.field_type === 'moritetu1st') {
+    return adminActiveUsersTab(state);
+  }
   const users = state.adminUsers || [];
   const loading = state.adminUsersLoading;
   return `
@@ -240,6 +310,54 @@ function adminUsersTab(state) {
         `).join('')}
       </ul>
       <button data-action="admin-users-refresh" class="btn-secondary w-full" style="margin-top:0.4rem">再読み込み</button>
+    </div>
+  `;
+}
+
+// moritetu1st 用: 現時点でアクティブな匿名ユーザー一覧
+function adminActiveUsersTab(state) {
+  const users = state.adminActiveUsers || [];
+  const loading = state.adminActiveUsersLoading;
+  function shortId(id) { return (id || '').slice(0, 8); }
+  function fmtTime(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return '-';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  return `
+    <div class="ip-block">
+      <label class="mini-label">アクティブなユーザー(直近30分)</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">匿名IDの先頭8文字 / 最初に観測した時刻 / 最後に観測した時刻 / 滞在ぶんの 5分bucket数</p>
+      ${loading ? '<p class="ip-hint">読み込み中…</p>' : ''}
+      ${!loading && users.length === 0 ? '<p class="ip-hint">いま見ている人はいません</p>' : ''}
+      <ul class="admin-user-list">
+        ${users.map(u => `
+          <li class="admin-user-item">
+            <div class="admin-user-head">
+              <strong>${escapeHtml(shortId(u.anon_id))}</strong>
+              <span class="admin-user-meta">${u.buckets} bucket</span>
+            </div>
+            <div class="admin-user-email">最初: ${escapeHtml(fmtTime(u.first_seen))} / 最後: ${escapeHtml(fmtTime(u.last_seen))}</div>
+          </li>
+        `).join('')}
+      </ul>
+      <button data-action="admin-active-users-refresh" class="btn-secondary w-full" style="margin-top:0.4rem">再読み込み</button>
+    </div>
+  `;
+}
+
+function adminMessageTab(state) {
+  const msg = state.headerMessage ?? '';
+  return `
+    <div class="ip-block">
+      <label class="mini-label">画面上部のメッセージ</label>
+      <p class="ip-desc" style="font-size:0.78rem;margin-bottom:0.4rem">部屋のヘッダー(森名の下)に表示されます。改行・URL自動リンク対応。空にすると非表示。</p>
+      <textarea id="msg-text" rows="6" maxlength="2000" style="width:100%;font-family:'Shippori Mincho',serif">${escapeHtml(msg)}</textarea>
+      <div class="ip-row" style="margin-top:0.4rem">
+        <button id="msg-save" class="btn-primary w-full">保存して反映</button>
+      </div>
+      <p id="msg-status" class="ip-hint" style="font-size:0.74rem;margin-top:0.3rem"></p>
     </div>
   `;
 }
@@ -560,10 +678,13 @@ function adminToolsTab(state) {
     </div>
     <div class="ip-block">
       <label class="mini-label">ツール</label>
-      ${(state.trees || []).length > 0 ? `
+      ${state.room?.field_type === 'moritetu1st' ? `
+        <p class="ip-hint" style="font-size:0.74rem;margin-bottom:0.3rem">部屋のすべてのマイワードと接続を一括削除します(取り消し不可)。</p>
+        <button data-action="mori-reset-room" class="btn-danger w-full">部屋をリセット</button>
+      ` : ((state.trees || []).length > 0 ? `
         <button data-action="timelapse" class="btn-secondary w-full">タイムラプスで振り返る</button>
         <button data-action="export-csv" class="btn-secondary w-full" style="margin-top:0.4rem">森をCSVで書き出す</button>
-      ` : '<p class="ip-hint">まだ幹がありません</p>'}
+      ` : '<p class="ip-hint">まだ幹がありません</p>')}
     </div>
   `;
 }
@@ -610,8 +731,44 @@ function wireIdle(el, state, cb) {
         catch { state.adminStats = null; }
         state.adminStatsLoading = false;
       }
+      // moritetu1st: ユーザータブを開いたらアクティブUUを取得
+      if (state.adminTab === 'users' && state.room?.field_type === 'moritetu1st' && cb.onAdminListActiveUsers) {
+        state.adminActiveUsersLoading = true;
+        cb.onRerender && cb.onRerender();
+        try { state.adminActiveUsers = await cb.onAdminListActiveUsers(30); }
+        catch { state.adminActiveUsers = []; }
+        state.adminActiveUsersLoading = false;
+      }
       cb.onRerender && cb.onRerender();
     });
+  });
+
+  // アクティブUU 再読み込み(moritetu)
+  el.querySelector('[data-action="admin-active-users-refresh"]')?.addEventListener('click', async () => {
+    if (!cb.onAdminListActiveUsers) return;
+    state.adminActiveUsersLoading = true;
+    cb.onRerender && cb.onRerender();
+    state.adminActiveUsers = await cb.onAdminListActiveUsers(30);
+    state.adminActiveUsersLoading = false;
+    cb.onRerender && cb.onRerender();
+  });
+
+  // メッセージ保存
+  el.querySelector('#msg-save')?.addEventListener('click', async () => {
+    const text = el.querySelector('#msg-text')?.value || '';
+    const status = el.querySelector('#msg-status');
+    if (status) status.textContent = '保存中…';
+    try {
+      await (cb.onAdminSetRoomMessage && cb.onAdminSetRoomMessage(text));
+      if (status) status.textContent = '保存しました';
+    } catch (e) {
+      if (status) status.textContent = '失敗: ' + (e.message || '');
+    }
+  });
+
+  // moritetu リセット
+  el.querySelector('[data-action="mori-reset-room"]')?.addEventListener('click', async () => {
+    if (cb.onAdminMoriResetRoom) await cb.onAdminMoriResetRoom();
   });
 
   // アクセス統計: 再読み込み
