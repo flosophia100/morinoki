@@ -145,7 +145,7 @@ function moriNodeHTML(node, state) {
       <input id="mn-text" type="text" maxlength="40" value="${escapeHtml(node.text || '')}">
       <label class="mini-label">色</label>
       <div class="color-row" id="mn-color">
-        ${colorList.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
+        ${colorList.map(c => `<button data-color="${c}" style="background-color:${c};background-image:none" class="${c===node.color?'on':''}"></button>`).join('')}
       </div>
       <label class="mini-label">説明(任意・300字)</label>
       <textarea id="mn-desc" maxlength="300" rows="4">${escapeHtml(node.description || '')}</textarea>
@@ -1330,7 +1330,7 @@ function ownNodeHTML(tree, node) {
       <input id="nf-text" type="text" maxlength="20" value="${escapeHtml(node.text)}">
       <label class="mini-label">色</label>
       <div class="color-row" id="nf-color">
-        ${palette.map(c => `<button data-color="${c}" style="background:${c}" class="${c===node.color?'on':''}"></button>`).join('')}
+        ${palette.map(c => `<button data-color="${c}" style="background-color:${c};background-image:none" class="${c===node.color?'on':''}"></button>`).join('')}
       </div>
       <label class="mini-label">説明(任意・300字)</label>
       <textarea id="nf-desc" maxlength="300" rows="4">${escapeHtml(node.description || '')}</textarea>

@@ -96,7 +96,18 @@ body.page-room { overflow: hidden; background: #e6e0d4; }
 .size-row button.on { background: var(--moss); color: var(--paper); border-color: var(--moss); }
 
 .color-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.color-row button { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); cursor: pointer; }
+.color-row button {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.15);
+  cursor: pointer;
+  /* PC ブラウザ(特に Firefox / Edge)の <button> ユーザエージェント
+     スタイル(背景グラデーション/buttonface)を打ち消し、inline style の
+     背景色をそのまま見せる */
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none !important;
+}
 .color-row button.on { outline: 2px solid var(--gold); outline-offset: 1px; }
 
 .ip-block textarea {
@@ -255,10 +266,13 @@ body.panel-hidden .forest-container { inset: 0; }
 }
 .morinokki-modal--tips {
   pointer-events: auto;
-  background: rgba(20, 25, 22, 0.42);  /* 薄い陰 */
+  /* 茶色被りを避けるため中性の黒陰。背景の atmosphere(温色系)に対しても
+     ニュートラルに見えるよう色相をカット */
+  background: rgba(0, 0, 0, 0.45) !important;
+  background-image: none !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
-  box-shadow: 0 6px 20px rgba(20, 25, 22, 0.30);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.32) !important;
   border: none;
   color: #f4ede0;
   max-width: min(28rem, calc(100% - 2rem));
