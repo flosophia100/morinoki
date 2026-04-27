@@ -311,59 +311,60 @@ export function createMoriForest(canvas, state) {
       const stable = n._dragging || n._isDraft;
       n._displayX = stable ? n.x : (n.x + sx);
       n._displayY = stable ? n.y : (n.y + sy);
-      n._r = nodeRadius(n);
+      // 生成アニメ: appearedAt からの経過時間で 0→1 に膨らむ(easeOutBack)
+      const at = state.moriNodeAppearedAt?.get(n.id);
+      let appearScale = 1;
+      if (at != null) {
+        const dur = 600;
+        const e = (now - at) / dur;
+        if (e < 1) appearScale = easeOutBack(Math.max(0, e));
+        else state.moriNodeAppearedAt.delete(n.id);
+      }
+      n._appearScale = appearScale;
+      n._r = nodeRadius(n) * appearScale;
     });
 
-    // エッジ(蛇行する枝で結ぶ)
+    // エッジ(蛇行する枝で結ぶ + 生成アニメで alpha を 0→1)
     const nodeById = new Map(nodes.map(n => [n.id, n]));
+    const edgeKey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
     (state.moriEdges || []).forEach((e, idx) => {
       const a = nodeById.get(e.a), b = nodeById.get(e.b);
       if (!a || !b) return;
       const seed = stringHash((e.a || '') + ':' + (e.b || '') + ':' + idx);
       const wStart = 4, wEnd = 4;
+      // 生成アニメ
+      const at = state.moriEdgeAppearedAt?.get(edgeKey(e.a, e.b));
+      let alpha = 0.7;
+      if (at != null) {
+        const dur = 500;
+        const e2 = (now - at) / dur;
+        if (e2 < 1) alpha = 0.7 * easeOutCubic(Math.max(0, e2));
+        else state.moriEdgeAppearedAt.delete(edgeKey(e.a, e.b));
+      }
+      const col = `rgba(122, 108, 92, ${alpha.toFixed(3)})`;
       drawMeanderingBranch(ctx, a._displayX, a._displayY, b._displayX, b._displayY, wStart, wEnd, seed,
-        'rgba(122, 108, 92, 0.7)', { meander: state.design?.branchMeander ?? 0.5 });
+        col, { meander: state.design?.branchMeander ?? 0.5 });
     });
 
-    // ノード — シンプルな円(パレット色とそのまま一致するよう、放射状バーストの暗い装飾はやめる)
-    //   - 影
-    //   - 同色グロー(縁の発光)
-    //   - 単色塗り(パレットの色と完全一致)
-    //   - 上部からほんのり白いハイライト
-    //   - わずかに濃い縁線
+    // ノード — 完全な単色塗り(パレットの swatch と100%一致)
+    //   - 同色グロー(縁の発光)で立体感
+    //   - 控えめな影
+    //   - 単色塗り(ハイライトや縁線なし → パレット色そのまま)
     nodes.forEach((n) => {
       const col = n.color || '#f4cfd6';
       drawGlow(ctx, n._displayX, n._displayY, n._r, col);
-      // 影
+      // 控えめな影(色味を変えない程度)
       ctx.save();
-      ctx.fillStyle = 'rgba(40, 30, 15, 0.18)';
+      ctx.fillStyle = 'rgba(40, 30, 15, 0.10)';
       ctx.beginPath();
-      ctx.arc(n._displayX + 1.5, n._displayY + 2.5, n._r, 0, Math.PI * 2);
+      ctx.arc(n._displayX + 1, n._displayY + 1.5, n._r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-      // 単色塗り(パレットと同じ色)
+      // 単色塗り(パレットと完全一致)
       ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
       ctx.fill();
-      // 上部から白いハイライト(立体感)
-      const grad = ctx.createRadialGradient(
-        n._displayX - n._r * 0.32, n._displayY - n._r * 0.34, n._r * 0.05,
-        n._displayX, n._displayY, n._r
-      );
-      grad.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
-      grad.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
-      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
-      ctx.fill();
-      // わずかに濃い縁線
-      ctx.strokeStyle = darken(col, 0.35);
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
-      ctx.stroke();
 
       // ドラフトはラベルを描かない(入力 box が上に重なるため)
       if (!n._isDraft && n.text && n.text.length > 0) {
@@ -398,6 +399,14 @@ export function createMoriForest(canvas, state) {
   }
 
   return { render, resize, screenToWorld, closeInlineInput };
+}
+
+// アニメ用イージング
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeOutBack(x) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 }
 
 function darken(hex, f) {

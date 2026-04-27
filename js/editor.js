@@ -183,7 +183,9 @@ function idleHTML(state) {
   return `
     <div class="ip-block">
       <h2 class="ip-title">${escapeHtml(state.room?.name || state.room?.slug || 'morinokki')}${isAdmin ? ' <span class="admin-badge">管理</span>' : ''}</h2>
-      <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
+      ${state.room?.field_type === 'moritetu1st'
+        ? (isAdmin ? '<p class="ip-hint">管理者モード</p>' : '')
+        : `<p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>`}
     </div>
     ${isAdmin ? adminPanelHTML(state) : ''}
     ${!isAdmin && state.room?.field_type !== 'moritetu1st' ? `
@@ -553,8 +555,9 @@ export function showTipsStack(tips, markRead) {
       <div class="morinokki-tip-body">${escapeHtml(t.body).replace(/\n/g, '<br>')}</div>
     </section>
   `).join('');
+  overlay.classList.add('morinokki-modal-overlay--tips');
   overlay.innerHTML = `
-    <div class="morinokki-modal">
+    <div class="morinokki-modal morinokki-modal--tips">
       <button class="morinokki-modal-close" aria-label="閉じる">×</button>
       <h3 class="morinokki-modal-title">お知らせ(${tips.length}件)</h3>
       <div class="morinokki-modal-body morinokki-tips-stack">${bodyHtml}</div>

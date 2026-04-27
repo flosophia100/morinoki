@@ -241,6 +241,36 @@ body.panel-hidden .forest-container { inset: 0; }
   padding: 0.6rem 0;
   border-bottom: 1px solid rgba(122, 108, 92, 0.22);
 }
+
+/* お知らせ用: 背景透過(塗りつぶさない)。文字は読みやすさのため背景にblur+影 */
+.morinokki-modal-overlay--tips {
+  background: rgba(20, 25, 22, 0.18);
+  backdrop-filter: blur(2px);
+}
+.morinokki-modal--tips {
+  background: rgba(255, 255, 255, 0.0);
+  backdrop-filter: blur(8px) saturate(110%);
+  -webkit-backdrop-filter: blur(8px) saturate(110%);
+  box-shadow: 0 8px 30px rgba(20, 25, 22, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: var(--ink, #1f2a25);
+}
+.morinokki-modal--tips .morinokki-modal-title,
+.morinokki-modal--tips .morinokki-tip-title {
+  color: #f4ede0;
+  text-shadow: 0 1px 4px rgba(20, 25, 22, 0.85);
+}
+.morinokki-modal--tips .morinokki-tip-body {
+  color: #f4ede0;
+  text-shadow: 0 1px 3px rgba(20, 25, 22, 0.85);
+}
+.morinokki-modal--tips .morinokki-modal-close {
+  color: #f4ede0;
+  text-shadow: 0 1px 3px rgba(20, 25, 22, 0.85);
+}
+.morinokki-modal--tips .morinokki-tip-item {
+  border-bottom-color: rgba(255, 255, 255, 0.25);
+}
 .morinokki-tips-stack .morinokki-tip-item:last-child { border-bottom: none; }
 .morinokki-tip-title {
   font-size: 1rem;

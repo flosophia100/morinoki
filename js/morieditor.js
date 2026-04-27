@@ -18,6 +18,11 @@ export async function initMoriRoom({ state, slug }) {
   state.moriNodes = [];
   state.moriEdges = [];
   state.headerMessage = '';
+  // ノード/エッジ生成アニメ用: id → 出現時刻(performance.now())
+  state.moriNodeAppearedAt = new Map();
+  state.moriEdgeAppearedAt = new Map();
+  let initialLoadDone = false;
+  const edgeKey = (a, b) => (a < b ? a + ':' + b : b + ':' + a);
 
   const PALETTE = [
     '#5a9b6e','#6f8a7d',
@@ -30,13 +35,42 @@ export async function initMoriRoom({ state, slug }) {
   async function reload() {
     const res = await api.moriList(slug);
     const r = Array.isArray(res) ? res[0] : res;
-    state.moriNodes = (r?.nodes || []).map(normalizeNode);
-    state.moriEdges = (r?.edges || []);
+    const newNodes = (r?.nodes || []).map(normalizeNode);
+    const newEdges = (r?.edges || []);
+    const now = performance.now();
+
+    // 新規ID(初回ロード以降のみ)に出現時刻を記録 — 描画側で生成アニメに使う
+    if (initialLoadDone) {
+      const oldIds = new Set(state.moriNodes.map(n => n.id));
+      newNodes.forEach(n => {
+        if (!oldIds.has(n.id)) state.moriNodeAppearedAt.set(n.id, now);
+      });
+      const oldEdgeKeys = new Set((state.moriEdges || []).map(e => edgeKey(e.a, e.b)));
+      newEdges.forEach(e => {
+        const k = edgeKey(e.a, e.b);
+        if (!oldEdgeKeys.has(k)) state.moriEdgeAppearedAt.set(k, now);
+      });
+    }
+    // 削除されたものを cleanup
+    {
+      const ids = new Set(newNodes.map(n => n.id));
+      for (const id of state.moriNodeAppearedAt.keys()) {
+        if (!ids.has(id)) state.moriNodeAppearedAt.delete(id);
+      }
+      const ks = new Set(newEdges.map(e => edgeKey(e.a, e.b)));
+      for (const k of state.moriEdgeAppearedAt.keys()) {
+        if (!ks.has(k)) state.moriEdgeAppearedAt.delete(k);
+      }
+    }
+
+    state.moriNodes = newNodes;
+    state.moriEdges = newEdges;
     state.headerMessage = r?.message || '';
     state.applyRoomMessage && state.applyRoomMessage(state.headerMessage);
     document.getElementById('forest-count').textContent = `${state.moriNodes.length}本の樹`;
     const ncEl = document.getElementById('node-count');
     if (ncEl) ncEl.textContent = '';  // moritetu では枝総数を出さない
+    initialLoadDone = true;
   }
 
   await reload();
