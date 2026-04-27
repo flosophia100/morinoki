@@ -325,13 +325,45 @@ export function createMoriForest(canvas, state) {
         'rgba(122, 108, 92, 0.7)', { meander: state.design?.branchMeander ?? 0.5 });
     });
 
-    // ノード(放射状バースト + glow)
+    // ノード — シンプルな円(パレット色とそのまま一致するよう、放射状バーストの暗い装飾はやめる)
+    //   - 影
+    //   - 同色グロー(縁の発光)
+    //   - 単色塗り(パレットの色と完全一致)
+    //   - 上部からほんのり白いハイライト
+    //   - わずかに濃い縁線
     nodes.forEach((n) => {
       const col = n.color || '#f4cfd6';
-      const stroke = darken(col, 0.4);
       drawGlow(ctx, n._displayX, n._displayY, n._r, col);
-      drawRadialBurst(ctx, n._displayX, n._displayY, n._r, stringHash(n.id || n.text || 'n'),
-        col, stroke, { densityMul: 1.1, design: state.design });
+      // 影
+      ctx.save();
+      ctx.fillStyle = 'rgba(40, 30, 15, 0.18)';
+      ctx.beginPath();
+      ctx.arc(n._displayX + 1.5, n._displayY + 2.5, n._r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      // 単色塗り(パレットと同じ色)
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
+      ctx.fill();
+      // 上部から白いハイライト(立体感)
+      const grad = ctx.createRadialGradient(
+        n._displayX - n._r * 0.32, n._displayY - n._r * 0.34, n._r * 0.05,
+        n._displayX, n._displayY, n._r
+      );
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
+      grad.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
+      ctx.fill();
+      // わずかに濃い縁線
+      ctx.strokeStyle = darken(col, 0.35);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(n._displayX, n._displayY, n._r, 0, Math.PI * 2);
+      ctx.stroke();
 
       // ドラフトはラベルを描かない(入力 box が上に重なるため)
       if (!n._isDraft && n.text && n.text.length > 0) {

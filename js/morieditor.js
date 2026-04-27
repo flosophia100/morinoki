@@ -97,6 +97,37 @@ export async function initMoriRoom({ state, slug }) {
       try { return await api.adminGetUniqueUsersHourly(state.adminToken, slug, days); }
       catch { return []; }
     },
+    onAdminGetStats: async (days = 30) => {
+      if (!state.adminToken) return null;
+      try {
+        const res = await api.adminGetStats(state.adminToken, slug, days);
+        return Array.isArray(res) ? res[0] : res;
+      } catch (e) { console.warn('adminGetStats', e); return null; }
+    },
+    // Tips(お知らせ)
+    onAdminListTips: async () => {
+      if (!state.adminToken) return [];
+      return await api.adminListTips(state.adminToken, slug);
+    },
+    onAdminCreateTip: async ({ title, body, enabled }) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminCreateTip(state.adminToken, slug, title, body, enabled);
+      showToast('お知らせを追加しました', 'success');
+    },
+    onAdminUpdateTip: async ({ tipId, title, body, enabled }) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminUpdateTip(state.adminToken, tipId, title, body, enabled);
+      showToast('お知らせを保存しました', 'success');
+    },
+    onAdminDeleteTip: async (tipId) => {
+      if (!state.adminToken) throw new Error('管理者ログインが必要です');
+      await api.adminDeleteTip(state.adminToken, tipId);
+      showToast('お知らせを削除しました', 'success');
+    },
+    onAdminListTipReads: async (tipId) => {
+      if (!state.adminToken) return [];
+      return await api.adminListTipReads(state.adminToken, tipId);
+    },
     onAdminSetRoomMessage: async (message) => {
       if (!state.adminToken) throw new Error('管理者ログインが必要です');
       await api.adminSetRoomMessage(state.adminToken, slug, message);
