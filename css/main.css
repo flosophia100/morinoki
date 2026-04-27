@@ -5,6 +5,8 @@
   --paper: #f5f2ec; --paper-dark: #e6e0d4; --ink: #1e2a33; --ink-soft: #52616e;
   --moss: #6f8a7d; --moss-deep: #435e52; --bark: #9d8972; --root: #b09d84;
   --gold: #c89566; --bud: #b0624a; --mist: rgba(245, 242, 236, 0.85);
+  /* ライト固定。OS/拡張のダーク化を打ち消す */
+  color-scheme: light only;
 }
 
 html, body { height: 100%; font-family: 'Shippori Mincho', serif; color: var(--ink); background: var(--paper); }
