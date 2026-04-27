@@ -155,10 +155,10 @@ export async function initMoriRoom({ state, slug }) {
   state.onMoriCreateNode = async (text, x, y) => {
     if (!state.anonId) return;
     try {
-      const color = PALETTE[0];
+      const color = '#f4cfd6'; // ピンク色をデフォルトに
       await api.moriCreateNode(slug, state.anonId, text, color, x, y);
-      await reload();
-      forest.render();
+      await reload();        // 自分の操作は即時反映
+      forest.render();        // 他のユーザーも Realtime broadcast 経由で同期される
     } catch (e) { showError(e, 'ノード作成失敗'); }
   };
   state.onMoriNodeMoved = async (n) => {

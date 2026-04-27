@@ -186,7 +186,18 @@ function idleHTML(state) {
       <p class="ip-hint">${(state.trees || []).length} 本の樹${isAdmin ? ' ・ 管理者モード' : ''}</p>
     </div>
     ${isAdmin ? adminPanelHTML(state) : ''}
-    ${!isAdmin ? `
+    ${!isAdmin && state.room?.field_type === 'moritetu1st' ? `
+      <div class="ip-block">
+        <p class="ip-desc" style="font-size:0.85rem;line-height:1.6">
+          ここは誰でも自由にマイワードを置いて・色を変え・つなげて育てる森です。<br>
+          空白を <strong>ダブルクリック / ダブルタップ</strong> でマイワード追加、ノードをドラッグで移動、別のノードに重ねると <strong>つながる/解除</strong> します。
+        </p>
+        <p class="ip-hint" style="font-size:0.74rem;text-align:right;margin-top:0.4rem">
+          <button data-action="show-about" class="btn-link">morinokkiとは</button>
+        </p>
+      </div>
+    ` : ''}
+    ${!isAdmin && state.room?.field_type !== 'moritetu1st' ? `
       <div class="ip-block ip-auth-form">
         ${tab !== 'reset' ? `
           <div class="auth-tabs">

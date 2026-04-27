@@ -30,11 +30,14 @@ export function createMoriForest(canvas, state) {
     if (!state.view) state.view = { ox: W/2, oy: H/2, scale: 1 };
   }
   resize();
-  window.addEventListener('resize', () => { resize(); render(); });
+  window.addEventListener('resize', () => { resize(); render(); positionInlineInput(); });
+  window.addEventListener('scroll', () => { positionInlineInput(); }, { passive: true });
 
   let drag = null;
   let pinch = null;
   let lastTapAt = 0, lastTapPos = null;
+  let draftNode = null; // 新規作成中の仮ノード(まだDB保存していない)
+  const DEFAULT_NEW_COLOR = '#f4cfd6'; // ピンク色
 
   function pt(e) {
     const r = canvas.getBoundingClientRect();
@@ -134,9 +137,9 @@ export function createMoriForest(canvas, state) {
       if (lastTapAt && (now - lastTapAt) < 350 && lastTapPos &&
           Math.hypot(d.last.x - lastTapPos.x, d.last.y - lastTapPos.y) < 16) {
         lastTapAt = 0; lastTapPos = null;
-        if (!d.hit && state.onMoriEmptyDblTap) {
+        if (!d.hit) {
           const w = screenToWorld(d.last.x, d.last.y);
-          openInlineInput(d.last.x, d.last.y, w.x, w.y);
+          openInlineInput(w.x, w.y);
         }
         return;
       }
@@ -148,18 +151,38 @@ export function createMoriForest(canvas, state) {
     }
   }
 
-  function openInlineInput(sx, sy, wx, wy) {
+  // ノードグラフィックを先に表示してから、ラベル矩形位置にテキスト入力を出す。
+  //   wx, wy: ワールド座標
+  function openInlineInput(wx, wy) {
     closeInlineInput();
+    // ドラフトノード(まだDB未保存)
+    draftNode = {
+      id: '__draft__',
+      text: '',
+      color: DEFAULT_NEW_COLOR,
+      x: wx, y: wy, size: 3,
+      _isDraft: true,
+    };
+    render();
+
     const input = document.createElement('input');
     input.type = 'text';
     input.maxLength = 40;
-    input.placeholder = '名前を入れて Enter';
+    input.placeholder = 'ワードを入力 → Enter';
     input.className = 'mori-inline-input';
-    input.style.left = sx + 'px';
-    input.style.top = sy + 'px';
     document.body.appendChild(input);
+    inlineInput = { el: input };
+    positionInlineInput();
+
     setTimeout(() => input.focus(), 10);
-    inlineInput = { el: input, wx, wy };
+
+    input.addEventListener('input', () => {
+      if (draftNode) {
+        draftNode.text = input.value;
+        render();
+        positionInlineInput();
+      }
+    });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         const text = input.value.trim();
@@ -170,13 +193,26 @@ export function createMoriForest(canvas, state) {
       }
     });
     input.addEventListener('blur', () => {
-      // 何も入力していなければ閉じる
+      // 入力なしでフォーカスが外れたら破棄
       if (!input.value.trim()) closeInlineInput();
     });
   }
+
+  // 入力ボックスをドラフトノードのラベル矩形(中心)にぴったり重ねる
+  function positionInlineInput() {
+    if (!inlineInput?.el || !draftNode) return;
+    const sx = draftNode.x * state.view.scale + state.view.ox;
+    const sy = draftNode.y * state.view.scale + state.view.oy;
+    const r = canvas.getBoundingClientRect();
+    inlineInput.el.style.left = (r.left + sx) + 'px';
+    inlineInput.el.style.top  = (r.top  + sy) + 'px';
+  }
+
   function closeInlineInput() {
     if (inlineInput?.el) inlineInput.el.remove();
     inlineInput = null;
+    draftNode = null;
+    render();
   }
 
   function onWheel(e) {
@@ -202,7 +238,7 @@ export function createMoriForest(canvas, state) {
     const hit = hitTest(p.x, p.y);
     if (hit) return; // ノード上は無視
     const w = screenToWorld(p.x, p.y);
-    openInlineInput(p.x, p.y, w.x, w.y);
+    openInlineInput(w.x, w.y);
   });
   canvas.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
@@ -253,8 +289,9 @@ export function createMoriForest(canvas, state) {
       ctx.save(); ctx.fillStyle = atmo.seasonMist; ctx.fillRect(0, 0, W, H); ctx.restore();
     }
 
-    const nodes = state.moriNodes || [];
-    const totalNodes = nodes.length;
+    const baseNodes = state.moriNodes || [];
+    const nodes = draftNode ? baseNodes.concat([draftNode]) : baseNodes;
+    const totalNodes = baseNodes.length;
     const roomSeed = (state.room?.slug || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0) || 42;
     drawBackgroundCanopies(ctx, W, H, totalNodes, roomSeed, state.ambience?.canopyDensity ?? 0.5);
 
@@ -270,8 +307,10 @@ export function createMoriForest(canvas, state) {
       const amp = 12;
       const sx = Math.sin(t * 0.13 + ph) * amp + Math.sin(t * 0.063 + ph * 1.7) * amp * 0.4;
       const sy = Math.cos(t * 0.105 + ph * 1.3) * amp + Math.cos(t * 0.048 + ph * 0.9) * amp * 0.35;
-      n._displayX = (n._dragging ? n.x : n.x + sx);
-      n._displayY = (n._dragging ? n.y : n.y + sy);
+      // ドラッグ中 / ドラフトは sway を当てない(入力ボックスがズレるため)
+      const stable = n._dragging || n._isDraft;
+      n._displayX = stable ? n.x : (n.x + sx);
+      n._displayY = stable ? n.y : (n.y + sy);
       n._r = nodeRadius(n);
     });
 
@@ -288,34 +327,36 @@ export function createMoriForest(canvas, state) {
 
     // ノード(放射状バースト + glow)
     nodes.forEach((n) => {
-      const col = n.color || '#5a9b6e';
+      const col = n.color || '#f4cfd6';
       const stroke = darken(col, 0.4);
       drawGlow(ctx, n._displayX, n._displayY, n._r, col);
       drawRadialBurst(ctx, n._displayX, n._displayY, n._r, stringHash(n.id || n.text || 'n'),
         col, stroke, { densityMul: 1.1, design: state.design });
 
-      // ラベル
-      const labelBg = 'rgba(31, 26, 21, 0.55)';
-      const labelFg = '#f4ede0';
-      ctx.save();
-      ctx.font = `${Math.max(11, n._r * 0.42)}px 'Klee One', serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const tw = ctx.measureText(n.text).width;
-      const rectX = n._displayX - tw/2 - 4;
-      const rectY = n._displayY - 9;
-      const rectW = tw + 8;
-      const rectH = 18;
-      ctx.fillStyle = labelBg;
-      ctx.fillRect(rectX, rectY, rectW, rectH);
-      ctx.fillStyle = labelFg;
-      ctx.fillText(n.text, n._displayX, n._displayY);
-      ctx.restore();
+      // ドラフトはラベルを描かない(入力 box が上に重なるため)
+      if (!n._isDraft && n.text && n.text.length > 0) {
+        const labelBg = 'rgba(31, 26, 21, 0.55)';
+        const labelFg = '#f4ede0';
+        ctx.save();
+        ctx.font = `${Math.max(11, n._r * 0.42)}px 'Klee One', serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(n.text).width;
+        const rectX = n._displayX - tw/2 - 4;
+        const rectY = n._displayY - 9;
+        const rectW = tw + 8;
+        const rectH = 18;
+        ctx.fillStyle = labelBg;
+        ctx.fillRect(rectX, rectY, rectW, rectH);
+        ctx.fillStyle = labelFg;
+        ctx.fillText(n.text, n._displayX, n._displayY);
+        ctx.restore();
 
-      // 説明があれば朱色の葉アイコン
-      if (n.description) {
-        drawLeafIcon(ctx, rectX, rectY, Math.PI / 4, 18, '#dc4124',
-          stringHash(n.id || n.text || 'leaf'));
+        // 説明があれば朱色の葉アイコン
+        if (n.description) {
+          drawLeafIcon(ctx, rectX, rectY, Math.PI / 4, 18, '#dc4124',
+            stringHash(n.id || n.text || 'leaf'));
+        }
       }
     });
 

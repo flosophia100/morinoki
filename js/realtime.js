@@ -19,6 +19,7 @@ export function subscribeRoom(roomId, _treeIdsRef, onChange, onStatus) {
       .channel(topic, { config: { private: false } })
       .on('broadcast', { event: 'tree_change' }, (msg) => onChange({ source: 'trees', payload: msg.payload }))
       .on('broadcast', { event: 'node_change' }, (msg) => onChange({ source: 'nodes', payload: msg.payload }))
+      .on('broadcast', { event: 'room_change' }, (msg) => onChange({ source: 'room', payload: msg.payload }))
       .subscribe((status, err) => {
         console.log('[realtime] subscribe status:', status, err?.message || '');
         onStatus && onStatus(status);
