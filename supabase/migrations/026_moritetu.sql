@@ -459,20 +459,23 @@ $fn$;
 ------------------------------------------------------------
 create or replace function public._broadcast_room_change()
 returns trigger
-language plpgsql security definer as $fn$
+language plpgsql security definer
+set search_path = public, realtime, pg_temp
+as $fn$
 declare
   v_room_id uuid;
   v_payload jsonb;
 begin
   v_room_id := coalesce((new.room_id), (old.room_id));
-  if v_room_id is null then return new; end if;
+  if v_room_id is null then return coalesce(new, old); end if;
   v_payload := jsonb_build_object(
     'table', tg_table_name,
     'op', tg_op,
     'room_id', v_room_id,
     'at', now()
   );
-  perform realtime.send(v_payload, 'room_change', 'room:' || v_room_id::text, true);
+  -- private=false にしないと anon が broadcast を受け取れない(006_broadcast.sql と同じ)
+  perform realtime.send(v_payload, 'room_change', 'room:' || v_room_id::text, false);
   return coalesce(new, old);
 end;
 $fn$;
