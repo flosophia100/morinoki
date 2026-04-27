@@ -208,6 +208,11 @@ export async function initMoriRoom({ state, slug }) {
   };
   state.onMoriNodeTap = (n) => {
     state.selection = { kind: 'mori-node', node: n };
+    // ノード編集 → パネルを開く
+    if (document.body.classList.contains('panel-hidden')) {
+      document.body.classList.remove('panel-hidden');
+      setTimeout(() => { forest.resize(); forest.render(); }, 260);
+    }
     updatePanel();
   };
   state.onMoriEmptyTap = () => {
@@ -218,6 +223,21 @@ export async function initMoriRoom({ state, slug }) {
   // 初期描画
   updatePanel();
   forest.render();
+
+  // パネル開閉トグル
+  //   - 管理者: 既存仕様(localStorage 設定で開閉、デフォルトは表示)
+  //   - 非管理者: 初期表示は非表示。三本線アイコン or ノードタップで開く
+  const PANEL_HIDE_KEY = 'mori.panel.hidden';
+  const panelToggle = document.getElementById('panel-toggle');
+  const isAdmin = !!state.adminToken;
+  const stored = localStorage.getItem(PANEL_HIDE_KEY);
+  const initiallyHidden = (stored === '1') || (stored === null && !isAdmin);
+  if (initiallyHidden) document.body.classList.add('panel-hidden');
+  panelToggle?.addEventListener('click', () => {
+    const hidden = document.body.classList.toggle('panel-hidden');
+    localStorage.setItem(PANEL_HIDE_KEY, hidden ? '1' : '0');
+    setTimeout(() => { forest.resize(); forest.render(); }, 260);
+  });
 
   // Realtime 購読
   const { realtimeReady } = await import('./supabase.js');
