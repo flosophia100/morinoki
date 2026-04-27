@@ -225,19 +225,40 @@ export async function initMoriRoom({ state, slug }) {
   forest.render();
 
   // パネル開閉トグル
-  //   - 管理者: 既存仕様(localStorage 設定で開閉、デフォルトは表示)
-  //   - 非管理者: 初期表示は非表示。三本線アイコン or ノードタップで開く
+  //   - 管理者: localStorage で永続(従来どおり、デフォルトは表示)
+  //   - 非管理者(moritetu): 常に初期は非表示。トグルはセッション内のみ効く
   const PANEL_HIDE_KEY = 'mori.panel.hidden';
   const panelToggle = document.getElementById('panel-toggle');
   const isAdmin = !!state.adminToken;
   const stored = localStorage.getItem(PANEL_HIDE_KEY);
-  const initiallyHidden = (stored === '1') || (stored === null && !isAdmin);
-  if (initiallyHidden) document.body.classList.add('panel-hidden');
+  const initiallyHidden = isAdmin ? (stored === '1') : true;
+  if (initiallyHidden) {
+    document.body.classList.add('panel-hidden');
+    // パネル状態の変化に合わせて canvas 内部解像度を再計算
+    //   ※ これがないと初回の getBoundingClientRect が古い大きさで固まり、
+    //     CSS だけ伸びて canvas の内容が縦/横にストレッチされる
+    requestAnimationFrame(() => { forest.resize(); forest.render(); });
+  }
   panelToggle?.addEventListener('click', () => {
     const hidden = document.body.classList.toggle('panel-hidden');
-    localStorage.setItem(PANEL_HIDE_KEY, hidden ? '1' : '0');
+    if (isAdmin) localStorage.setItem(PANEL_HIDE_KEY, hidden ? '1' : '0');
     setTimeout(() => { forest.resize(); forest.render(); }, 260);
   });
+
+  // モバイルで初期ロード時にレイアウトが確定する前に resize() してしまい
+  // canvas が縦伸びする問題への対策。ResizeObserver でキャンバスのサイズ
+  // 変化(URLバー縮小・フォント読み込み完了・パネル表示変化など)を監視。
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => { forest.resize(); forest.render(); });
+    const canvasEl = document.getElementById('forest-canvas');
+    if (canvasEl) ro.observe(canvasEl);
+  }
+  // visualViewport(モバイルブラウザのアドレスバー収縮)
+  if (typeof window.visualViewport !== 'undefined') {
+    window.visualViewport.addEventListener('resize', () => {
+      forest.resize(); forest.render();
+    });
+  }
 
   // Realtime 購読
   const { realtimeReady } = await import('./supabase.js');
